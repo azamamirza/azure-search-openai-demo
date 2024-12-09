@@ -1,4 +1,4 @@
-# Refactored from https://github.com/Azure-Samples/ms-identity-python-on-behalf-of
+# Refactored from https://github.com/azamamirza/ms-identity-python-on-behalf-of
 
 import base64
 import json
@@ -302,7 +302,7 @@ class AuthenticationHelper:
                 rsa_key = pem_key
                 return rsa_key
 
-    # See https://github.com/Azure-Samples/ms-identity-python-on-behalf-of/blob/939be02b11f1604814532fdacc2c2eccd198b755/FlaskAPI/helpers/authorization.py#L44
+    # See https://github.com/azamamirza/ms-identity-python-on-behalf-of/blob/939be02b11f1604814532fdacc2c2eccd198b755/FlaskAPI/helpers/authorization.py#L44
     async def validate_access_token(self, token: str):
         """
         Validate an access token is issued by Entra

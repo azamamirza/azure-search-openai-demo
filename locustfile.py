@@ -18,10 +18,8 @@ class ChatUser(HttpUser):
                     {
                         "content": random.choice(
                             [
-                                "What is included in my Northwind Health Plus plan that is not in standard?",
-                                "What does a Product Manager do?",
-                                "What happens in a performance review?",
-                                "Whats your whistleblower policy?",
+                                "What is minimum face amount?",
+                                "How do you calculate the age?",
                             ]
                         ),
                         "role": "user",
@@ -43,12 +41,12 @@ class ChatUser(HttpUser):
             "/chat",
             json={
                 "messages": [
-                    {"content": "What happens in a performance review?", "role": "user"},
+                    {"content": "What happens in a policy review?", "role": "user"},
                     {
-                        "content": "During a performance review, employees will receive feedback on their performance over the past year, including both successes and areas for improvement. The feedback will be provided by the employee's supervisor and is intended to help the employee develop and grow in their role [employee_handbook-3.pdf]. The review is a two-way dialogue between the employee and their manager, so employees are encouraged to be honest and open during the process [employee_handbook-3.pdf]. The employee will also have the opportunity to discuss their goals and objectives for the upcoming year [employee_handbook-3.pdf]. A written summary of the performance review will be provided to the employee, which will include a rating of their performance, feedback, and goals and objectives for the upcoming year [employee_handbook-3.pdf].",
+                        "content": "During a policy review, you wil review options for policy changes with your client, including premium rates and policy types. The review will allow the client to learn about the various NLG policies and make an informed decision [IUL+QRC+(Green+Card).pdf]. The client will also have the opportunity to discuss their goals and objectives for their policy [IUL+QRC+(Green+Card).pdf]. It will also give you a chance to discuss the nearest age calculation with the client [Nearest+Age+Chart.pdf].",
                         "role": "assistant",
                     },
-                    {"content": "Does my plan cover eye exams?", "role": "user"},
+                    {"content": "Does my policy cover accidental death?", "role": "user"},
                 ],
                 "context": {
                     "overrides": {
@@ -75,7 +73,7 @@ class ChatVisionUser(HttpUser):
             json={
                 "messages": [
                     {
-                        "content": "Can you identify any correlation between oil prices and stock market trends?",
+                        "content": "Can you identify any correlation between age and policy premiums?",
                         "role": "user",
                     }
                 ],
@@ -104,7 +102,7 @@ class ChatVisionUser(HttpUser):
             "/chat/stream",
             json={
                 "messages": [
-                    {"content": "Compare the impact of interest rates and GDP in financial markets.", "role": "user"}
+                    {"content": "Compare the impact of Covid-19 on life insurance rates.", "role": "user"}
                 ],
                 "context": {
                     "overrides": {

@@ -37,7 +37,7 @@
                         "role": "assistant"
                     },
                     {
-                        "content": "Generate search query for: What does a product manager do?",
+                        "content": "Generate search query for: What is minimum face amount??",
                         "role": "user"
                     }
                 ],
@@ -92,7 +92,7 @@
                         "role": "system"
                     },
                     {
-                        "content": "What does a product manager do?\n\nSources:\nBenefit_Options-2.pdf: There is a whistleblower policy.",
+                        "content": "What is minimum face amount??\n\nSources:\nBenefit_Options-2.pdf: There is a whistleblower policy.",
                         "role": "user"
                     }
                 ],

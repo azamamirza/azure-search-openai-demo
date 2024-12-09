@@ -1,4 +1,4 @@
-const BACKEND_URI = "";
+const BACKEND_URI = "https://capps-backend-6hhgk3excwsss.bluemushroom-7a816bec.eastus.azurecontainerapps.io";
 
 import { ChatAppResponse, ChatAppResponseOrError, ChatAppRequest, Config, SimpleAPIResponse, HistoryListApiResponse, HistroyApiResponse } from "./models";
 import { useLogin, getToken, isUsingAppServicesLogin } from "../authConfig";

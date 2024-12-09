@@ -10,18 +10,18 @@ from approaches.approach import Approach
 
 class ChatApproach(Approach, ABC):
     query_prompt_few_shots: list[ChatCompletionMessageParam] = [
-        {"role": "user", "content": "How did crypto do last year?"},
-        {"role": "assistant", "content": "Summarize Cryptocurrency Market Dynamics from last year"},
-        {"role": "user", "content": "What are my health plans?"},
-        {"role": "assistant", "content": "Show available health plans"},
+        {"role": "user", "content": "What are life events?"},
+        {"role": "assistant", "content": "Summarize life insurance types"},
+        {"role": "user", "content": "What are my AD&D benefits?"},
+        {"role": "assistant", "content": "Show available life insurance plans"},
     ]
     NO_RESPONSE = "0"
 
     follow_up_questions_prompt_content = """Generate 3 very brief follow-up questions that the user would likely ask next.
     Enclose the follow-up questions in double angle brackets. Example:
-    <<Are there exclusions for prescriptions?>>
-    <<Which pharmacies can be ordered from?>>
-    <<What is the limit for over-the-counter medication?>>
+    <<Are there exclusions?>>
+    <<Life insurance qualification criteria?>>
+    <<What are the age limits?>>
     Do no repeat questions that have already been asked.
     Make sure the last question ends with ">>".
     """
@@ -118,7 +118,7 @@ class ChatApproach(Approach, ABC):
         followup_questions_started = False
         followup_content = ""
         async for event_chunk in await chat_coroutine:
-            # "2023-07-01-preview" API version has a bug where first response has empty choices
+            
             event = event_chunk.model_dump()  # Convert pydantic model to dict
             if event["choices"]:
                 completion = {

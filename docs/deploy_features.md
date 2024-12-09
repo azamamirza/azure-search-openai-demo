@@ -287,8 +287,8 @@ By default, the deployed Azure web app will only allow requests from the same or
 For the frontend code, change `BACKEND_URI` in `api.ts` to point at the deployed backend URL, so that all fetch requests will be sent to the deployed backend.
 
 For an alternate frontend that's written in Web Components and deployed to Static Web Apps, check out
-[azure-search-openai-javascript](https://github.com/Azure-Samples/azure-search-openai-javascript) and its guide
-on [using a different backend](https://github.com/Azure-Samples/azure-search-openai-javascript#using-a-different-backend).
+[azure-search-openai-javascript](https://github.com/azamamirza/azure-search-openai-javascript) and its guide
+on [using a different backend](https://github.com/azamamirza/azure-search-openai-javascript#using-a-different-backend).
 Both these repositories adhere to the same [HTTP protocol for AI chat apps](https://aka.ms/chatprotocol).
 
 ## Adding an OpenAI load balancer

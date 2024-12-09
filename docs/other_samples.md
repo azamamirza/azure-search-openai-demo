@@ -26,7 +26,7 @@ The primary differences:
 
 Feature comparison:
 
-| Feature | azure-search-openai-demo | sample-app-aoai-chatGPT |
+| Feature | nlg-ai-rag | sample-app-aoai-chatGPT |
 | --- | --- | --- |
 | RAG approach | Multiple approaches | Only via ChatCompletion API data_sources |
 | Vector support | ✅ Yes | ✅ Yes |
@@ -40,7 +40,7 @@ Feature comparison:
 
 Technology comparison:
 
-| Tech | azure-search-openai-demo | sample-app-aoai-chatGPT |
+| Tech | nlg-ai-rag | sample-app-aoai-chatGPT |
 | --- | --- | --- |
 | Frontend | React | React |
 | Backend | Python (Quart) | Python (Quart) |
