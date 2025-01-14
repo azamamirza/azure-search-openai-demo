@@ -1,3 +1,4 @@
+
 @description('The tags to apply to all resources')
 param tags object = {}
 
@@ -6,9 +7,6 @@ param vnetName string
 
 @description('The location to create the private endpoints')
 param location string = resourceGroup().location
-
-param dnsSubscriptionId string
-param dnsResourceGroupName string
 
 param vnetPeSubnetName string
 
@@ -34,12 +32,6 @@ param logAnalyticsWorkspaceId string
 
 var abbrs = loadJsonContent('abbreviations.json')
 
-
-var dnsZones = [
-  for privateEndpointConnection in privateEndpointConnections: resourceId(dnsSubscriptionId, dnsResourceGroupName, 'Microsoft.Network/privateDnsZones', privateEndpointConnection.dnsZoneName)
-]
-
-/*
 // DNS Zones
 module dnsZones './core/networking/private-dns-zones.bicep' = [for privateEndpointConnection in privateEndpointConnections: {
   name: '${privateEndpointConnection.groupId}-dnszone'
@@ -49,7 +41,6 @@ module dnsZones './core/networking/private-dns-zones.bicep' = [for privateEndpoi
     virtualNetworkName: vnetName
   }
 }]
-*/
 
 // Private Endpoints
 var privateEndpointInfo = [
@@ -69,11 +60,11 @@ module privateEndpoints './core/networking/private-endpoint.bicep' = [for privat
     subnetId: vnetPeSubnetName
     serviceId: privateEndpointInfo.resourceId
     groupIds: [ privateEndpointInfo.groupId ]
-    dnsZoneId: dnsZones[privateEndpointInfo.dnsZoneIndex]
+    dnsZoneId: dnsZones[privateEndpointInfo.dnsZoneIndex].outputs.id
   }
-
+  dependsOn: [ dnsZones ]
 }]
-/*
+
 // Provision additional DNS Zones for Azure Monitor
 // https://learn.microsoft.com/azure/azure-monitor/logs/private-link-configure#review-your-endpoints-dns-settings
 var monitorDnsZoneNames = [
@@ -169,4 +160,3 @@ module monitorPrivateEndpoint './core/networking/private-endpoint.bicep' = {
   }
   dependsOn: [ monitorDnsZones, dnsZones ]
 }
-*/

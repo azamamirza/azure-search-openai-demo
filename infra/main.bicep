@@ -98,8 +98,17 @@ param openAiSkuName string = 'S0'
 param openAiApiKey string = ''
 param openAiApiOrganization string = ''
 
-param documentIntelligenceServiceName string = '' // Set in main.parameters.json
-param documentIntelligenceResourceGroupName string = '' // Set in main.parameters.json
+// Set in main.parameters.json...
+param documentIntelligenceServiceName string = '' 
+param documentIntelligenceResourceGroupName string = '' 
+
+param dnsSubscriptionId string
+param dnsResourceGroupName string
+
+param vnetResourceGroupName string
+param vnetName string
+param backendSubnetName string
+param appSubnetName string
 
 // Limited regions for new version:
 // https://learn.microsoft.com/azure/ai-services/document-intelligence/concept-layout
@@ -307,7 +316,7 @@ module monitoring 'core/monitor/monitoring.bicep' = if (useApplicationInsights) 
     logAnalyticsName: !empty(logAnalyticsName)
       ? logAnalyticsName
       : '${abbrs.operationalInsightsWorkspaces}${resourceToken}'
-    publicNetworkAccess: publicNetworkAccess
+    publicNetworkAccess: 'Enabled'
   }
 }
 
@@ -1020,7 +1029,10 @@ module isolation 'network-isolation.bicep' = {
     deploymentTarget: deploymentTarget
     location: location
     tags: tags
-    vnetName: '${abbrs.virtualNetworks}${resourceToken}'
+    vnetResourceGroupName: vnetResourceGroupName
+    vnetName: vnetName //'${abbrs.virtualNetworks}${resourceToken}'
+    appSubnetName: appSubnetName
+    backendSubnetName: backendSubnetName
     // Need to check deploymentTarget due to https://github.com/Azure/bicep/issues/3990
     appServicePlanName: deploymentTarget == 'appservice' ? appServicePlan.outputs.name : ''
     usePrivateEndpoint: usePrivateEndpoint
@@ -1037,7 +1049,7 @@ var openAiPrivateEndpointConnection = (isAzureOpenAiHost && deployAzureOpenAi &&
         resourceIds: concat(
           [openAi.outputs.resourceId],
           useGPT4V ? [computerVision.outputs.resourceId] : [],
-          !useLocalPdfParser ? [documentIntelligence.outputs.resourceId] : []
+          !useLocalPdfParser ? [] : []
         )
       }
     ]
@@ -1060,9 +1072,14 @@ var otherPrivateEndpointConnections = (usePrivateEndpoint && deploymentTarget ==
         resourceIds: [backend.outputs.id]
       }
       {
-        groupId: 'cosmosdb'
+        groupId: 'sql'
         dnsZoneName: 'privatelink.documents.azure.com'
         resourceIds: (useAuthentication && useChatHistoryCosmos) ? [cosmosDb.outputs.resourceId] : []
+      }
+      {
+        groupId: 'account'
+        dnsZoneName: 'privatelink.cognitiveservices.azure.com'
+        resourceIds: [documentIntelligence.outputs.resourceId]
       }
     ]
   : []
@@ -1079,6 +1096,8 @@ module privateEndpoints 'private-endpoints.bicep' = if (usePrivateEndpoint && de
     privateEndpointConnections: privateEndpointConnections
     applicationInsightsId: useApplicationInsights ? monitoring.outputs.applicationInsightsId : ''
     logAnalyticsWorkspaceId: useApplicationInsights ? monitoring.outputs.logAnalyticsWorkspaceId : ''
+    dnsSubscriptionId: dnsSubscriptionId
+    dnsResourceGroupName: dnsResourceGroupName
     vnetName: isolation.outputs.vnetName
     vnetPeSubnetName: isolation.outputs.backendSubnetId
   }
