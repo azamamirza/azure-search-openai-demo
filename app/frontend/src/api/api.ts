@@ -188,3 +188,19 @@ export async function deleteChatHistoryApi(id: string, idToken: string): Promise
     const dataResponse: any = await response.json();
     return dataResponse;
 }
+export async function graphRagApi(requestData: ChatAppRequest, idToken: string | undefined): Promise<ChatAppResponse> {
+    const headers = await getHeaders(idToken);
+
+    const response = await fetch(`https://bg-backend-app1.azurewebsites.net/api/v1/query/`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify(requestData),
+    });
+
+    if (!response.ok) {
+        throw new Error(`Graph RAG request failed with status ${response.status} - ${response.statusText}`);
+    }
+
+    const data: ChatAppResponse = await response.json();
+    return data;
+}
