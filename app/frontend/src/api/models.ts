@@ -1,7 +1,8 @@
 export const enum RetrievalMode {
     Hybrid = "hybrid",
     Vectors = "vectors",
-    Text = "text"
+    Text = "text",
+    Graph = "graph"
 }
 
 export const enum GPT4VInput {

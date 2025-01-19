@@ -59,7 +59,8 @@ export const VectorSettings = ({ updateRetrievalMode, updateVectorFields, showIm
                         selected: retrievalMode == RetrievalMode.Vectors,
                         data: RetrievalMode.Vectors
                     },
-                    { key: "text", text: t("labels.retrievalMode.options.texts"), selected: retrievalMode == RetrievalMode.Text, data: RetrievalMode.Text }
+                    { key: "text", text: t("labels.retrievalMode.options.texts"), selected: retrievalMode == RetrievalMode.Text, data: RetrievalMode.Text },
+                    { key: "graph", text: t("labels.retrievalMode.options.graph"), selected: retrievalMode == RetrievalMode.Graph, data: RetrievalMode.Graph }
                 ]}
                 required
                 onChange={onRetrievalModeChange}

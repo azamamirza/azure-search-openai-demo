@@ -1,7 +1,7 @@
 import { ChatAppResponse, ChatAppResponseOrError, ChatAppRequest, Config, SimpleAPIResponse, HistoryListApiResponse, HistroyApiResponse } from "./models";
 import { useLogin, getToken, isUsingAppServicesLogin } from "../authConfig";
 
-const BACKEND_URI = window.location.origin;
+const BACKEND_URI = 'https://capps-backend-2775otfh6oiva.calmsand-dc0a0904.centralus.azurecontainerapps.io';
 
 export async function getHeaders(idToken: string | undefined): Promise<Record<string, string>> {
     // If using login and not using app services, add the id token of the logged in account as the authorization

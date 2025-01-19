@@ -61,9 +61,9 @@ async function fetchAuthSetup(): Promise<AuthSetup> {
     return await response.json();
 }
 
-const authSetup = await fetchAuthSetup();
+const authSetup = false;
 
-export const useLogin = authSetup.useLogin;
+export const useLogin = false;
 
 export const requireAccessControl = authSetup.requireAccessControl;
 
