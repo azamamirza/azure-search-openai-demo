@@ -20,6 +20,7 @@ import {
     SpeechConfig
 } from "../../api";
 import { Answer, AnswerError, AnswerLoading } from "../../components/Answer";
+import { graphRagApi } from "../../api";
 import { QuestionInput } from "../../components/QuestionInput";
 import { ExampleList } from "../../components/Example";
 import { UserChatMessage } from "../../components/UserChatMessage";
@@ -169,20 +170,20 @@ const Chat = () => {
 
     const makeApiRequest = async (question: string) => {
         lastQuestionRef.current = question;
-
+    
         error && setError(undefined);
         setIsLoading(true);
         setActiveCitation(undefined);
         setActiveAnalysisPanelTab(undefined);
-
+    
         const token = client ? await getToken(client) : undefined;
-
+    
         try {
             const messages: ResponseMessage[] = answers.flatMap(a => [
                 { content: a[0], role: "user" },
                 { content: a[1].message.content, role: "assistant" }
             ]);
-
+    
             const request: ChatAppRequest = {
                 messages: [...messages, { content: question, role: "user" }],
                 context: {
@@ -207,43 +208,49 @@ const Chat = () => {
                         ...(seed !== null ? { seed: seed } : {})
                     }
                 },
-                // AI Chat Protocol: Client must pass on any session state received from the server
                 session_state: answers.length ? answers[answers.length - 1][1].session_state : null
             };
-
-            const response = await chatApi(request, shouldStream, token);
-            if (!response.body) {
-                throw Error("No response body");
+    
+            console.log("Sending API request:", JSON.stringify(request, null, 2));
+    
+            let response;
+            if (retrievalMode === RetrievalMode.Graph) {
+                response = await graphRagApi(request, retrievalMode, token);
+            } else {
+                response = await chatApi(request, shouldStream, token);
             }
-            if (response.status > 299 || !response.ok) {
-                throw Error(`Request failed with status ${response.status}`);
+    
+            if (!response || (shouldStream && !response.body)) {
+                throw new Error("No response body received from API");
             }
+    
             if (shouldStream) {
                 const parsedResponse: ChatAppResponse = await handleAsyncRequest(question, answers, response.body);
                 setAnswers([...answers, [question, parsedResponse]]);
                 if (typeof parsedResponse.session_state === "string" && parsedResponse.session_state !== "") {
-                    const token = client ? await getToken(client) : undefined;
                     historyManager.addItem(parsedResponse.session_state, [...answers, [question, parsedResponse]], token);
                 }
             } else {
                 const parsedResponse: ChatAppResponseOrError = await response.json();
                 if (parsedResponse.error) {
-                    throw Error(parsedResponse.error);
+                    throw new Error(parsedResponse.error);
                 }
                 setAnswers([...answers, [question, parsedResponse as ChatAppResponse]]);
                 if (typeof parsedResponse.session_state === "string" && parsedResponse.session_state !== "") {
-                    const token = client ? await getToken(client) : undefined;
                     historyManager.addItem(parsedResponse.session_state, [...answers, [question, parsedResponse as ChatAppResponse]], token);
                 }
             }
+    
             setSpeechUrls([...speechUrls, null]);
         } catch (e) {
+            console.error("Error during API request:", e);
             setError(e);
         } finally {
             setIsLoading(false);
         }
     };
-
+    
+    
     const clearChat = () => {
         lastQuestionRef.current = "";
         error && setError(undefined);

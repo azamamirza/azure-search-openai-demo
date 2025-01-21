@@ -1,8 +1,8 @@
-import { ChatAppResponse, ChatAppResponseOrError, ChatAppRequest, Config, SimpleAPIResponse, HistoryListApiResponse, HistroyApiResponse } from "./models";
+import { ChatAppResponse, ChatAppResponseOrError, ChatAppRequest, Config, SimpleAPIResponse, HistoryListApiResponse, HistroyApiResponse, RetrievalMode } from "./models";
 import { useLogin, getToken, isUsingAppServicesLogin } from "../authConfig";
 
-const BACKEND_URI = 'https://capps-backend-2775otfh6oiva.calmsand-dc0a0904.centralus.azurecontainerapps.io';
-
+const BACKEND_PROXY = "/api";  // Instead of hardcoding backend URL
+const BASE_API_URL = "https://bg-backend-app1.azurewebsites.net";  // Instead of hardcoding backend URL
 export async function getHeaders(idToken: string | undefined): Promise<Record<string, string>> {
     // If using login and not using app services, add the id token of the logged in account as the authorization
     if (useLogin && !isUsingAppServicesLogin) {
@@ -15,7 +15,7 @@ export async function getHeaders(idToken: string | undefined): Promise<Record<st
 }
 
 export async function configApi(): Promise<Config> {
-    const response = await fetch(`${BACKEND_URI}/config`, {
+    const response = await fetch(`${BACKEND_PROXY}/config`, {
         method: "GET"
     });
 
@@ -24,11 +24,14 @@ export async function configApi(): Promise<Config> {
 
 export async function askApi(request: ChatAppRequest, idToken: string | undefined): Promise<ChatAppResponse> {
     const headers = await getHeaders(idToken);
-    const response = await fetch(`${BACKEND_URI}/ask`, {
-        method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify(request)
-    });
+    
+
+const response = await fetch(`${BACKEND_PROXY}/chat/stream`, {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify(request)
+});
+
 
     if (response.status > 299 || !response.ok) {
         throw Error(`Request failed with status ${response.status}`);
@@ -42,7 +45,7 @@ export async function askApi(request: ChatAppRequest, idToken: string | undefine
 }
 
 export async function chatApi(request: ChatAppRequest, shouldStream: boolean, idToken: string | undefined): Promise<Response> {
-    let url = `${BACKEND_URI}/chat`;
+    let url = `${BACKEND_PROXY}/chat`;
     if (shouldStream) {
         url += "/stream";
     }
@@ -79,7 +82,7 @@ export async function getSpeechApi(text: string): Promise<string | null> {
 }
 
 export function getCitationFilePath(citation: string): string {
-    return `${BACKEND_URI}/content/${citation}`;
+    return `${BACKEND_PROXY}/content/${citation}`;
 }
 
 export async function uploadFileApi(request: FormData, idToken: string): Promise<SimpleAPIResponse> {
@@ -188,19 +191,47 @@ export async function deleteChatHistoryApi(id: string, idToken: string): Promise
     const dataResponse: any = await response.json();
     return dataResponse;
 }
-export async function graphRagApi(requestData: ChatAppRequest, idToken: string | undefined): Promise<ChatAppResponse> {
-    const headers = await getHeaders(idToken);
+export async function graphRagApi(
+    requestData: ChatAppRequest,
+    retrievalMode: RetrievalMode,
+    idToken: string | undefined
+): Promise<ChatAppResponse> {
+    try {
+        const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+        };
 
-    const response = await fetch(`https://bg-backend-app1.azurewebsites.net/api/v1/query/`, {
-        method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify(requestData),
-    });
+        if (idToken) {
+            headers["Authorization"] = `Bearer ${idToken}`;
+        }
 
-    if (!response.ok) {
-        throw new Error(`Graph RAG request failed with status ${response.status} - ${response.statusText}`);
+        const requestBody = {
+            query: requestData.messages?.[0]?.content || "",
+            retrievalMode: retrievalMode,
+        };
+
+        console.log("Graph RAG API Request:", JSON.stringify(requestBody));
+
+        const response = await fetch('/graph_rag', {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query: requestData }),
+        });
+        
+        
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Graph RAG API Error: ${response.status} - ${errorText}`);
+            throw new Error(`Graph RAG request failed: ${response.status} - ${errorText}`);
+        }
+
+        const data: ChatAppResponse = await response.json();
+        console.log("Graph RAG API Response:", data);
+        
+        return data;
+    } catch (error) {
+        console.error("Error in graphRagApi:", error);
+        throw new Error(`Failed to fetch Graph RAG data: ${error instanceof Error ? error.message : error}`);
     }
-
-    const data: ChatAppResponse = await response.json();
-    return data;
 }

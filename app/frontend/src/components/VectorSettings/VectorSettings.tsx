@@ -5,7 +5,8 @@ import { useTranslation } from "react-i18next";
 
 import styles from "./VectorSettings.module.css";
 import { HelpCallout } from "../../components/HelpCallout";
-import { RetrievalMode, VectorFieldOptions } from "../../api";
+import { ChatAppRequest, graphRagApi, RetrievalMode, VectorFieldOptions } from "../../api";
+import { getToken } from "../../authConfig";
 
 interface Props {
     showImageOptions?: boolean;
@@ -18,10 +19,48 @@ export const VectorSettings = ({ updateRetrievalMode, updateVectorFields, showIm
     const [retrievalMode, setRetrievalMode] = useState<RetrievalMode>(RetrievalMode.Hybrid);
     const [vectorFieldOption, setVectorFieldOption] = useState<VectorFieldOptions>(VectorFieldOptions.Both);
 
-    const onRetrievalModeChange = (_ev: React.FormEvent<HTMLDivElement>, option?: IDropdownOption<RetrievalMode> | undefined) => {
-        setRetrievalMode(option?.data || RetrievalMode.Hybrid);
-        updateRetrievalMode(option?.data || RetrievalMode.Hybrid);
+    const onRetrievalModeChange = async (
+        _ev: React.FormEvent<HTMLDivElement>,
+        option?: IDropdownOption<RetrievalMode> | undefined
+    ) => {
+        const selectedMode = option?.data || RetrievalMode.Hybrid;
+        setRetrievalMode(selectedMode);
+        updateRetrievalMode(selectedMode);
+    
+        if (selectedMode === RetrievalMode.Graph) {
+            try {
+                // Ensure proper authentication token retrieval
+                const idToken = await getToken();
+    
+                // Prepare request payload
+                const request: ChatAppRequest = {
+                    messages: [{ content: "example query", role: "user" }],
+                    context: {
+                        overrides: {
+                            retrieval_mode: RetrievalMode.Graph,
+                            vector_fields: [VectorFieldOptions.Embedding], // or appropriate value
+                            language: "en" // or appropriate value
+                        }
+                    },
+                    session_state: null
+                };
+    
+                console.log("Sending Graph RAG API request:", request);
+    
+                // Call the Graph RAG API
+                const response = await graphRagApi(request, selectedMode, idToken);
+    
+                console.log("Graph RAG API response:", response);
+            } catch (error) {
+                if (error instanceof Error) {
+                    console.error("Error fetching Graph RAG data:", error.message);
+                } else {
+                    console.error("Unknown error occurred during Graph RAG API call.");
+                }
+            }
+        }
     };
+    
 
     const onVectorFieldsChange = (_ev: React.FormEvent<HTMLDivElement>, option?: IDropdownOption<RetrievalMode> | undefined) => {
         setVectorFieldOption(option?.key as VectorFieldOptions);
@@ -43,32 +82,19 @@ export const VectorSettings = ({ updateRetrievalMode, updateVectorFields, showIm
     return (
         <Stack className={styles.container} tokens={{ childrenGap: 10 }}>
             <Dropdown
-                id={retrievalModeFieldId}
-                label={t("labels.retrievalMode.label")}
-                selectedKey={defaultRetrievalMode.toString()}
-                options={[
-                    {
-                        key: "hybrid",
-                        text: t("labels.retrievalMode.options.hybrid"),
-                        selected: retrievalMode == RetrievalMode.Hybrid,
-                        data: RetrievalMode.Hybrid
-                    },
-                    {
-                        key: "vectors",
-                        text: t("labels.retrievalMode.options.vectors"),
-                        selected: retrievalMode == RetrievalMode.Vectors,
-                        data: RetrievalMode.Vectors
-                    },
-                    { key: "text", text: t("labels.retrievalMode.options.texts"), selected: retrievalMode == RetrievalMode.Text, data: RetrievalMode.Text },
-                    { key: "graph", text: t("labels.retrievalMode.options.graph"), selected: retrievalMode == RetrievalMode.Graph, data: RetrievalMode.Graph }
-                ]}
-                required
-                onChange={onRetrievalModeChange}
-                aria-labelledby={retrievalModeId}
-                onRenderLabel={(props: IDropdownProps | undefined) => (
-                    <HelpCallout labelId={retrievalModeId} fieldId={retrievalModeFieldId} helpText={t("helpTexts.retrievalMode")} label={props?.label} />
-                )}
-            />
+    id={retrievalModeFieldId}
+    label={t("labels.retrievalMode.label")}
+    selectedKey={retrievalMode.toString()}
+    options={[
+        { key: "hybrid", text: t("labels.retrievalMode.options.hybrid"), data: RetrievalMode.Hybrid },
+        { key: "vectors", text: t("labels.retrievalMode.options.vectors"), data: RetrievalMode.Vectors },
+        { key: "text", text: t("labels.retrievalMode.options.texts"), data: RetrievalMode.Text },
+        { key: "graph", text: t("labels.retrievalMode.options.graph"), data: RetrievalMode.Graph }
+    ]}
+    onChange={onRetrievalModeChange}
+    required
+    aria-labelledby={retrievalModeId}
+/>
 
             {showImageOptions && [RetrievalMode.Vectors, RetrievalMode.Hybrid].includes(retrievalMode) && (
                 <Dropdown

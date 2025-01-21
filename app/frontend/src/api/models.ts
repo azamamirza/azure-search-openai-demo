@@ -19,6 +19,7 @@ export const enum VectorFieldOptions {
 
 export type ChatAppRequestOverrides = {
     retrieval_mode?: RetrievalMode;
+    graph_query_type?: string; 
     semantic_ranker?: boolean;
     semantic_captions?: boolean;
     include_category?: string;

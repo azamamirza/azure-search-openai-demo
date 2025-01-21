@@ -38,7 +38,21 @@ export default defineConfig({
             "/upload": "http://localhost:50505",
             "/delete_uploaded": "http://localhost:50505",
             "/list_uploaded": "http://localhost:50505",
-            "/chat_history": "http://localhost:50505"
-        }
+            "/chat_history": "http://localhost:50505",
+            "/api": {
+                target: "https://capps-backend-2775otfh6oiva.calmsand-dc0a0904.centralus.azurecontainerapps.io",
+                changeOrigin: true,
+                secure: false,
+                ws: true,
+                rewrite: (path) => path.replace(/^\/api/, '')  // Remove "/api" prefix if needed
+            },
+            "/graph_rag": {
+            target: "https://bg-backend-app1.azurewebsites.net",
+            changeOrigin: true,
+            secure: false,
+            ws: true,
+            rewrite: (path) => path.replace(/^\/graph_rag/, '/api/v1/query')
+           }
+    }
     }
 });
