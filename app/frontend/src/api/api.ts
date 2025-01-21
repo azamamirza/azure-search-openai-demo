@@ -191,47 +191,33 @@ export async function deleteChatHistoryApi(id: string, idToken: string): Promise
     const dataResponse: any = await response.json();
     return dataResponse;
 }
-export async function graphRagApi(
-    requestData: ChatAppRequest,
-    retrievalMode: RetrievalMode,
-    idToken: string | undefined
-): Promise<ChatAppResponse> {
+export async function graphRagApi(requestData: ChatAppRequest, retrievalMode: RetrievalMode, idToken: string | undefined): Promise<ChatAppResponse> {
+    const headers = { 
+        'Content-Type': 'application/json',
+        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) 
+    };
+
     try {
-        const headers: Record<string, string> = {
-            "Content-Type": "application/json",
-        };
-
-        if (idToken) {
-            headers["Authorization"] = `Bearer ${idToken}`;
-        }
-
-        const requestBody = {
-            query: requestData.messages?.[0]?.content || "",
-            retrievalMode: retrievalMode,
-        };
-
-        console.log("Graph RAG API Request:", JSON.stringify(requestBody));
+        console.log("Sending Graph RAG request with data:", requestData);
 
         const response = await fetch('/graph_rag', {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query: requestData }),
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({
+                messages: requestData.messages,
+                context: requestData.context,
+                session_state: requestData.session_state
+            })
         });
-        
-        
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error(`Graph RAG API Error: ${response.status} - ${errorText}`);
             throw new Error(`Graph RAG request failed: ${response.status} - ${errorText}`);
         }
 
-        const data: ChatAppResponse = await response.json();
-        console.log("Graph RAG API Response:", data);
-        
-        return data;
+        return await response.json();
     } catch (error) {
-        console.error("Error in graphRagApi:", error);
-        throw new Error(`Failed to fetch Graph RAG data: ${error instanceof Error ? error.message : error}`);
+        console.error("Error during API request:", error);
+        throw new Error("Failed to fetch Graph RAG data");
     }
 }
