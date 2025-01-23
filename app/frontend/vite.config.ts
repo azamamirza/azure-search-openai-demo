@@ -46,12 +46,12 @@ export default defineConfig({
                 ws: true,
                 rewrite: (path) => path.replace(/^\/api/, '')  // Remove "/api" prefix if needed
             },
-            "/graph_rag": {
+            "/graph": {
             target: "https://bg-backend-app1.azurewebsites.net",
             changeOrigin: true,
             secure: false,
             ws: true,
-            rewrite: (path) => path.replace(/^\/graph_rag/, '/api/v1/query')
+            rewrite: (path) => path.replace(/^\/graph/, '/api/v1/query')
            }
     }
     }

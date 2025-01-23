@@ -170,20 +170,20 @@ const Chat = () => {
 
     const makeApiRequest = async (question: string) => {
         lastQuestionRef.current = question;
-    
+
         error && setError(undefined);
         setIsLoading(true);
         setActiveCitation(undefined);
         setActiveAnalysisPanelTab(undefined);
-    
+
         const token = client ? await getToken(client) : undefined;
-    
+
         try {
             const messages: ResponseMessage[] = answers.flatMap(a => [
                 { content: a[0], role: "user" },
                 { content: a[1].message.content, role: "assistant" }
             ]);
-    
+
             const request: ChatAppRequest = {
                 messages: [...messages, { content: question, role: "user" }],
                 context: {
@@ -210,20 +210,20 @@ const Chat = () => {
                 },
                 session_state: answers.length ? answers[answers.length - 1][1].session_state : null
             };
-    
+
             console.log("Sending API request:", JSON.stringify(request, null, 2));
-    
+
             let response;
             if (retrievalMode === RetrievalMode.Graph) {
-                response = await graphRagApi(request, retrievalMode, token);
+                response = await graphRagApi(request, shouldStream, token);
             } else {
                 response = await chatApi(request, shouldStream, token);
             }
-    
+
             if (!response || (shouldStream && !response.body)) {
                 throw new Error("No response body received from API");
             }
-    
+
             if (shouldStream) {
                 const parsedResponse: ChatAppResponse = await handleAsyncRequest(question, answers, response.body);
                 setAnswers([...answers, [question, parsedResponse]]);
@@ -240,7 +240,7 @@ const Chat = () => {
                     historyManager.addItem(parsedResponse.session_state, [...answers, [question, parsedResponse as ChatAppResponse]], token);
                 }
             }
-    
+
             setSpeechUrls([...speechUrls, null]);
         } catch (e) {
             console.error("Error during API request:", e);
@@ -249,8 +249,8 @@ const Chat = () => {
             setIsLoading(false);
         }
     };
-    
-    
+
+
     const clearChat = () => {
         lastQuestionRef.current = "";
         error && setError(undefined);
