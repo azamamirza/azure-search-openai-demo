@@ -63,29 +63,29 @@ export async function chatApi(request: ChatAppRequest, shouldStream: boolean, id
         body: JSON.stringify(request)
     });
 }
+
 export async function graphRagApi(requestData: ChatAppRequest, shouldStream: boolean, idToken: string | undefined): Promise<Response> {
-    const headers = {
+    const headers: HeadersInit = {
         "Content-Type": "application/json",
         ...(idToken ? { Authorization: `Bearer ${idToken}` } : {})
     };
 
     try {
-        console.log("Sending Graph RAG request with data:", requestData);
+        const lastUserMessage =
+            requestData.messages
+                .slice()
+                .reverse()
+                .find(m => m.role === "user")?.content || "";
 
-        const response = await fetch(`${BASE_API_URL}/api/v1/query`, {
+        const response = await fetch("/graph", {
             method: "POST",
-            headers: {
-                ...headers,
-                "Access-Control-Allow-Origin": "*", // Allow any origin
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS", // Allow common methods
-                "Access-Control-Allow-Headers": "Content-Type, Authorization" // Allow necessary headers
-            },
+            headers,
             body: JSON.stringify({
+                query: lastUserMessage,
                 messages: requestData.messages,
                 context: requestData.context,
                 session_state: requestData.session_state
-            }),
-            mode: "cors" // Enable CORS requests
+            })
         });
 
         if (!response.ok) {
@@ -93,13 +93,31 @@ export async function graphRagApi(requestData: ChatAppRequest, shouldStream: boo
             throw new Error(`Graph RAG request failed: ${response.status} - ${errorText}`);
         }
 
-        return await response.json();
+        if (shouldStream) {
+            return response;
+        } else {
+            const apiData = await response.json();
+            console.log("API response received:", apiData);
+
+            // Transform the API response to the expected format
+            const transformedResponse = {
+                message: {
+                    role: "assistant", // Hardcoded role since it's always the assistant's response
+                    content: apiData.response || "No response available",
+                    metadata: {
+                        nodes: apiData.nodes || []
+                    }
+                },
+                ...apiData // Preserve original response data
+            };
+
+            return transformedResponse;
+        }
     } catch (error) {
         console.error("Error during API request:", error);
         throw new Error("Failed to fetch Graph RAG data");
     }
 }
-
 export async function getSpeechApi(text: string): Promise<string | null> {
     return await fetch("/speech", {
         method: "POST",

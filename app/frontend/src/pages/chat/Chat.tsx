@@ -214,42 +214,73 @@ const Chat = () => {
             console.log("Sending API request:", JSON.stringify(request, null, 2));
 
             let response;
-            if (retrievalMode === RetrievalMode.Graph) {
-                response = await graphRagApi(request, shouldStream, token);
-            } else {
-                response = await chatApi(request, shouldStream, token);
+            try {
+                if (retrievalMode === RetrievalMode.Graph) {
+                    response = await graphRagApi(request, shouldStream, token);
+                } else {
+                    response = await chatApi(request, shouldStream, token);
+                }
+            } catch (e) {
+                console.error("API connection failed:", e);
+                throw new Error(`API connection failed: ${(e as Error).message}`);
             }
 
-            if (!response || (shouldStream && !response.body)) {
-                throw new Error("No response body received from API");
+            // Add response validation
+            if (!response) {
+                throw new Error("No response received from server");
             }
 
+            // Handle HTTP errors
+            if (!response.ok) {
+                const errorBody = await response.text();
+                console.error("API Error Response:", {
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: errorBody
+                });
+                throw new Error(`API Error: ${response.status} ${response.statusText}`);
+            }
+
+            // Handle empty body cases
             if (shouldStream) {
-                const parsedResponse: ChatAppResponse = await handleAsyncRequest(question, answers, response.body);
-                setAnswers([...answers, [question, parsedResponse]]);
-                if (typeof parsedResponse.session_state === "string" && parsedResponse.session_state !== "") {
-                    historyManager.addItem(parsedResponse.session_state, [...answers, [question, parsedResponse]], token);
+                if (!response.body) {
+                    throw new Error("Streaming response body is empty");
                 }
+
+                const parsedResponse = await handleAsyncRequest(question, answers, response.body);
+                // ... [existing streaming handling code] ...
             } else {
-                const parsedResponse: ChatAppResponseOrError = await response.json();
-                if (parsedResponse.error) {
-                    throw new Error(parsedResponse.error);
-                }
-                setAnswers([...answers, [question, parsedResponse as ChatAppResponse]]);
-                if (typeof parsedResponse.session_state === "string" && parsedResponse.session_state !== "") {
-                    historyManager.addItem(parsedResponse.session_state, [...answers, [question, parsedResponse as ChatAppResponse]], token);
+                try {
+                    const parsedResponse: ChatAppResponseOrError = await response.json();
+
+                    if (!parsedResponse) {
+                        throw new Error("Received empty JSON response");
+                    }
+
+                    if ('error' in parsedResponse) {
+                        throw new Error(parsedResponse.error);
+                    }
+
+                    // ... [existing non-streaming handling code] ...
+                } catch (jsonError) {
+                    console.error("JSON parsing error:", jsonError);
+                    throw new Error("Failed to parse API response");
                 }
             }
 
             setSpeechUrls([...speechUrls, null]);
         } catch (e) {
-            console.error("Error during API request:", e);
-            setError(e);
+            console.error("Error during API request:", {
+                error: e,
+                question,
+                retrievalMode,
+                timestamp: new Date().toISOString()
+            });
+            setError(e instanceof Error ? e : new Error("Unknown error occurred"));
         } finally {
             setIsLoading(false);
         }
     };
-
 
     const clearChat = () => {
         lastQuestionRef.current = "";

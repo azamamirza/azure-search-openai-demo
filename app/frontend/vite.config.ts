@@ -39,20 +39,32 @@ export default defineConfig({
             "/delete_uploaded": "http://localhost:50505",
             "/list_uploaded": "http://localhost:50505",
             "/chat_history": "http://localhost:50505",
+            "/graph": {
+                target: "https://bg-backend-app1.azurewebsites.net",
+                changeOrigin: true,
+                secure: false,
+                rewrite: path => path.replace(/^\/graph/, "/api/v1/query/"), // Keep trailing slash
+                headers: {
+                    // Force HTTPS in forwarded headers
+                    "X-Forwarded-Proto": "https"
+                },
+                configure: proxy => {
+                    proxy.on("proxyRes", proxyRes => {
+                        // Fix redirect location to HTTPS
+                        const location = proxyRes.headers.location;
+                        if (location?.startsWith("http://")) {
+                            proxyRes.headers.location = location.replace("http://", "https://");
+                        }
+                    });
+                }
+            },
             "/api": {
                 target: "https://capps-backend-2775otfh6oiva.calmsand-dc0a0904.centralus.azurecontainerapps.io",
                 changeOrigin: true,
                 secure: false,
                 ws: true,
-                rewrite: (path) => path.replace(/^\/api/, '')  // Remove "/api" prefix if needed
-            },
-            "/graph": {
-            target: "https://bg-backend-app1.azurewebsites.net",
-            changeOrigin: true,
-            secure: false,
-            ws: true,
-            rewrite: (path) => path.replace(/^\/graph/, '/api/v1/query')
-           }
-    }
+                rewrite: path => path.replace(/^\/api/, "") // Remove "/api" prefix if needed
+            }
+        }
     }
 });

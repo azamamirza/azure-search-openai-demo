@@ -26,42 +26,8 @@ export const VectorSettings = ({ updateRetrievalMode, updateVectorFields, showIm
         const selectedMode = option?.data || RetrievalMode.Hybrid;
         setRetrievalMode(selectedMode);
         updateRetrievalMode(selectedMode);
-    
-        if (selectedMode === RetrievalMode.Graph) {
-            try {
-                // Ensure proper authentication token retrieval
-                const idToken = await getToken();
-    
-                // Prepare request payload
-                const request: ChatAppRequest = {
-                    messages: [{ content: "example query", role: "user" }],
-                    context: {
-                        overrides: {
-                            retrieval_mode: RetrievalMode.Graph,
-                            vector_fields: [VectorFieldOptions.Embedding], // or appropriate value
-                            language: "en" // or appropriate value
-                        }
-                    },
-                    session_state: null
-                };
-    
-                console.log("Sending Graph RAG API request:", request);
-    
-                // Call the Graph RAG API
-                const response = await graphRagApi(request, selectedMode, idToken);
-    
-                console.log("Graph RAG API response:", response);
-            } catch (error) {
-                if (error instanceof Error) {
-                    console.error("Error fetching Graph RAG data:", error.message);
-                } else {
-                    console.error("Unknown error occurred during Graph RAG API call.");
-                }
-            }
-        }
     };
     
-
     const onVectorFieldsChange = (_ev: React.FormEvent<HTMLDivElement>, option?: IDropdownOption<RetrievalMode> | undefined) => {
         setVectorFieldOption(option?.key as VectorFieldOptions);
         updateVectorFields([option?.key as VectorFieldOptions]);
