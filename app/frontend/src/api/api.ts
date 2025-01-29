@@ -11,7 +11,11 @@ import {
 import { useLogin, getToken, isUsingAppServicesLogin } from "../authConfig";
 
 const BACKEND_PROXY = "/api"; // Instead of hardcoding backend URL
-const BASE_API_URL = "https://bg-backend-app1.azurewebsites.net"; // Instead of hardcoding backend URL
+const BASE_API_URL = "https://bg-backend-app1.azurewebsites.net";
+interface GraphRagResponse {
+    response: string;
+    nodes?: any[];
+} // Instead of hardcoding backend URL
 export async function getHeaders(idToken: string | undefined): Promise<Record<string, string>> {
     // If using login and not using app services, add the id token of the logged in account as the authorization
     if (useLogin && !isUsingAppServicesLogin) {
@@ -77,42 +81,49 @@ export async function graphRagApi(requestData: ChatAppRequest, shouldStream: boo
                 .reverse()
                 .find(m => m.role === "user")?.content || "";
 
+        // Match the working endpoint and body structure
         const response = await fetch("/graph", {
             method: "POST",
             headers,
             body: JSON.stringify({
-                query: lastUserMessage,
-                messages: requestData.messages,
-                context: requestData.context,
-                session_state: requestData.session_state
+                query: lastUserMessage // Send only the query parameter
             })
         });
+        const apiData: GraphRagResponse = await response.json();
+        if (!apiData.response) {
+            throw new Error("Invalid response format from API");
+        }
 
         if (!response.ok) {
             const errorText = await response.text();
             throw new Error(`Graph RAG request failed: ${response.status} - ${errorText}`);
         }
 
-        if (shouldStream) {
-            return response;
-        } else {
+        // For non-streaming responses, parse JSON and transform
+        if (!shouldStream) {
             const apiData = await response.json();
-            console.log("API response received:", apiData);
 
-            // Transform the API response to the expected format
-            const transformedResponse = {
-                message: {
-                    role: "assistant", // Hardcoded role since it's always the assistant's response
-                    content: apiData.response || "No response available",
-                    metadata: {
-                        nodes: apiData.nodes || []
-                    }
-                },
-                ...apiData // Preserve original response data
-            };
-
-            return transformedResponse;
+            // Create a new Response with transformed data
+            return new Response(
+                JSON.stringify({
+                    message: {
+                        role: "assistant",
+                        content: apiData.response || "No response available",
+                        metadata: {
+                            nodes: apiData.nodes || []
+                        }
+                    },
+                    ...apiData
+                }),
+                {
+                    status: 200,
+                    headers: { "Content-Type": "application/json" }
+                }
+            );
         }
+
+        // For streaming responses, return directly
+        return response;
     } catch (error) {
         console.error("Error during API request:", error);
         throw new Error("Failed to fetch Graph RAG data");
