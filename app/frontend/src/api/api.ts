@@ -68,7 +68,11 @@ export async function chatApi(request: ChatAppRequest, shouldStream: boolean, id
     });
 }
 
-export async function graphRagApi(requestData: ChatAppRequest, shouldStream: boolean, idToken: string | undefined): Promise<Response> {
+export async function graphRagApi(
+    requestData: ChatAppRequest,
+    shouldStream: boolean,
+    idToken: string | undefined
+): Promise<Response> {
     const headers: HeadersInit = {
         "Content-Type": "application/json",
         ...(idToken ? { Authorization: `Bearer ${idToken}` } : {})
@@ -81,54 +85,40 @@ export async function graphRagApi(requestData: ChatAppRequest, shouldStream: boo
                 .reverse()
                 .find(m => m.role === "user")?.content || "";
 
-        // Match the working endpoint and body structure
         const response = await fetch("/graph", {
             method: "POST",
             headers,
-            body: JSON.stringify({
-                query: lastUserMessage // Send only the query parameter
-            })
+            body: JSON.stringify({ query: lastUserMessage }) // Send only the query parameter
         });
-        const apiData: GraphRagResponse = await response.json();
-        if (!apiData.response) {
-            throw new Error("Invalid response format from API");
-        }
 
         if (!response.ok) {
             const errorText = await response.text();
             throw new Error(`Graph RAG request failed: ${response.status} - ${errorText}`);
         }
 
-        // For non-streaming responses, parse JSON and transform
-        if (!shouldStream) {
-            const apiData = await response.json();
+        const apiData: GraphRagResponse = await response.json();
 
-            // Create a new Response with transformed data
-            return new Response(
-                JSON.stringify({
-                    message: {
-                        role: "assistant",
-                        content: apiData.response || "No response available",
-                        metadata: {
-                            nodes: apiData.nodes || []
-                        }
-                    },
-                    ...apiData
-                }),
-                {
-                    status: 200,
-                    headers: { "Content-Type": "application/json" }
-                }
-            );
-        }
-
-        // For streaming responses, return directly
-        return response;
+        return new Response(
+            JSON.stringify({
+                message: {
+                    role: "assistant",
+                    content: apiData.response || "No response available",
+                    metadata: { nodes: apiData.nodes || [] }
+                },
+                context: apiData.context || { data_points: [], followup_questions: [], thoughts: [] },
+                session_state: apiData.session_state || null,
+            }),
+            {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            }
+        );
     } catch (error) {
         console.error("Error during API request:", error);
         throw new Error("Failed to fetch Graph RAG data");
     }
 }
+
 export async function getSpeechApi(text: string): Promise<string | null> {
     return await fetch("/speech", {
         method: "POST",
