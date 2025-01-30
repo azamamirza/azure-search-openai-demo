@@ -11,7 +11,7 @@ import {
 import { useLogin, getToken, isUsingAppServicesLogin } from "../authConfig";
 
 const BACKEND_PROXY = "/api"; // Instead of hardcoding backend URL
-const BASE_API_URL = "https://bg-backend-app1.azurewebsites.net";
+
 interface GraphRagResponse {
     response: string;
     nodes?: any[];
@@ -67,57 +67,46 @@ export async function chatApi(request: ChatAppRequest, shouldStream: boolean, id
         body: JSON.stringify(request)
     });
 }
-
 export async function graphRagApi(
-    requestData: ChatAppRequest,
-    shouldStream: boolean,
+    requestData: ChatAppRequest, 
+    shouldStream: boolean, 
     idToken: string | undefined
-): Promise<Response> {
+  ): Promise<Response> {
     const headers: HeadersInit = {
-        "Content-Type": "application/json",
-        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {})
+      "Content-Type": "application/json",
+      ...(idToken ? { Authorization: `Bearer ${idToken}` } : {})
     };
-
+  
     try {
-        const lastUserMessage =
-            requestData.messages
-                .slice()
-                .reverse()
-                .find(m => m.role === "user")?.content || "";
-
-        const response = await fetch("/graph", {
-            method: "POST",
-            headers,
-            body: JSON.stringify({ query: lastUserMessage }) // Send only the query parameter
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Graph RAG request failed: ${response.status} - ${errorText}`);
-        }
-
-        const apiData: GraphRagResponse = await response.json();
-
-        return new Response(
-            JSON.stringify({
-                message: {
-                    role: "assistant",
-                    content: apiData.response || "No response available",
-                    metadata: { nodes: apiData.nodes || [] }
-                },
-                context: apiData.context || { data_points: [], followup_questions: [], thoughts: [] },
-                session_state: apiData.session_state || null,
-            }),
-            {
-                status: 200,
-                headers: { "Content-Type": "application/json" }
-            }
-        );
+      const lastUserMessage =
+        requestData.messages
+          .slice()
+          .reverse()
+          .find(m => m.role === "user")?.content || "";
+  
+      const response = await fetch("/graph", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ query: lastUserMessage })
+      });
+  
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Graph RAG request failed: ${response.status} - ${errorText}`);
+      }
+  
+      const apiData: GraphRagResponse = await response.json();
+  
+      return new Response(apiData.response?.trim() || "No response available", {
+        status: 200,
+        headers: { "Content-Type": "text/plain" } // 👈 Sets response as plain text
+      });
     } catch (error) {
-        console.error("Error during API request:", error);
-        throw new Error("Failed to fetch Graph RAG data");
+      console.error("Graph RAG API Error:", error.message || error);
+      throw new Error(`Graph RAG request failed: ${error.message || "Unknown error"}`);
     }
-}
+  }
+  
 
 export async function getSpeechApi(text: string): Promise<string | null> {
     return await fetch("/speech", {
