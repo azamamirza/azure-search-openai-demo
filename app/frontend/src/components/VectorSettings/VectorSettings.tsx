@@ -55,7 +55,7 @@ export const VectorSettings = ({ updateRetrievalMode, updateVectorFields, showIm
         { key: "hybrid", text: t("labels.retrievalMode.options.hybrid"), data: RetrievalMode.Hybrid },
         { key: "vectors", text: t("labels.retrievalMode.options.vectors"), data: RetrievalMode.Vectors },
         { key: "text", text: t("labels.retrievalMode.options.texts"), data: RetrievalMode.Text },
-        { key: "graph", text: t("labels.retrievalMode.options.graph"), data: RetrievalMode.Graph }
+        { key: "graph", text: t("Graph"), data: RetrievalMode.Graph }
     ]}
     onChange={onRetrievalModeChange}
     required

@@ -214,71 +214,90 @@ const Chat = () => {
             console.log("Sending API request:", JSON.stringify(request, null, 2));
 
             let response;
-            try {
-                if (retrievalMode === RetrievalMode.Graph) {
-                    response = await graphRagApi(request, shouldStream, token);
-                } else {
-                    response = await chatApi(request, shouldStream, token);
+            if (retrievalMode === RetrievalMode.Graph) {
+                response = await graphRagApi(request, shouldStream, token);
+                // Handle Graph response differently
+                if (shouldStream) {
+                    await handleGraphStreamResponse(question, response.body);
+                    return;
                 }
-            } catch (e) {
-                console.error("API connection failed:", e);
-                throw new Error(`API connection failed: ${(e as Error).message}`);
-            }
-
-            // Add response validation
-            if (!response) {
-                throw new Error("No response received from server");
-            }
-
-            // Handle HTTP errors
-            if (!response.ok) {
-                const errorBody = await response.text();
-                console.error("API Error Response:", {
-                    status: response.status,
-                    statusText: response.statusText,
-                    body: errorBody
-                });
-                throw new Error(`API Error: ${response.status} ${response.statusText}`);
-            }
-
-            // Handle empty body cases
-            if (shouldStream) {
-                if (!response.body) {
-                    throw new Error("Streaming response body is empty");
-                }
-
-                const parsedResponse = await handleAsyncRequest(question, answers, response.body);
-                // ... [existing streaming handling code] ...
             } else {
-                try {
-                    const parsedResponse: ChatAppResponseOrError = await response.json();
+                response = await chatApi(request, shouldStream, token);
+            }
 
-                    if (!parsedResponse) {
-                        throw new Error("Received empty JSON response");
-                    }
+            if (!response || (shouldStream && !response.body)) {
+                throw new Error("No response body received from API");
+            }
 
-                    if ('error' in parsedResponse) {
-                        throw new Error(parsedResponse.error);
-                    }
-
-                    // ... [existing non-streaming handling code] ...
-                } catch (jsonError) {
-                    console.error("JSON parsing error:", jsonError);
-                    throw new Error("Failed to parse API response");
+            if (shouldStream) {
+                const parsedResponse: ChatAppResponse = await handleAsyncRequest(question, answers, response.body);
+                setAnswers([...answers, [question, parsedResponse]]);
+                if (typeof parsedResponse.session_state === "string" && parsedResponse.session_state !== "") {
+                    historyManager.addItem(parsedResponse.session_state, [...answers, [question, parsedResponse]], token);
+                }
+            } else {
+                const parsedResponse: ChatAppResponseOrError = await response.json();
+                if (parsedResponse.error) {
+                    throw new Error(parsedResponse.error);
+                }
+                setAnswers([...answers, [question, parsedResponse as ChatAppResponse]]);
+                if (typeof parsedResponse.session_state === "string" && parsedResponse.session_state !== "") {
+                    historyManager.addItem(parsedResponse.session_state, [...answers, [question, parsedResponse as ChatAppResponse]], token);
                 }
             }
 
             setSpeechUrls([...speechUrls, null]);
         } catch (e) {
-            console.error("Error during API request:", {
-                error: e,
-                question,
-                retrievalMode,
-                timestamp: new Date().toISOString()
-            });
-            setError(e instanceof Error ? e : new Error("Unknown error occurred"));
+            console.error("Error during API request:", e);
+            setError(e);
         } finally {
             setIsLoading(false);
+        }
+    };
+    const handleGraphStreamResponse = async (question: string, stream: ReadableStream | null) => {
+        if (!stream) throw Error("No stream available");
+    
+        const reader = stream.getReader();
+        const decoder = new TextDecoder();
+    
+        try {
+            let result = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                result += decoder.decode(value, { stream: true });
+                
+                // Update UI incrementally if needed
+                setAnswers(prev => {
+                    const tempResponse: ChatAppResponse = {
+                        message: { content: result, role: "assistant" },
+                        session_state: null,
+                        delta: { content: result, role: "assistant" },
+                        context: {
+                            data_points: [],
+                            followup_questions: [],
+                            thoughts: []
+                        }
+                    };
+                    return [...prev, [question, tempResponse]];
+                });
+            }
+    
+            // Final processing
+            const parsedResponse: ChatAppResponse = {
+                message: { content: result, role: "assistant" },
+                session_state: null, // Add actual session state if needed
+                delta: { content: result, role: "assistant" },
+                context: {
+                    data_points: [],
+                    followup_questions: null,
+                    thoughts: []
+                }
+            };
+    
+            setAnswers([...answers, [question, parsedResponse]]);
+        } finally {
+            reader.releaseLock();
         }
     };
 
