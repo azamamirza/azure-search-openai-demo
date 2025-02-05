@@ -67,46 +67,141 @@ export async function chatApi(request: ChatAppRequest, shouldStream: boolean, id
         body: JSON.stringify(request)
     });
 }
-export async function graphRagApi(
-    requestData: ChatAppRequest, 
-    shouldStream: boolean, 
-    idToken: string | undefined
-  ): Promise<Response> {
+// export async function graphRagApi(requestData: ChatAppRequest, shouldStream: boolean, idToken: string | undefined): Promise<Response> {
+//     const headers: HeadersInit = {
+//         "Content-Type": "application/json",
+//         ...(idToken ? { Authorization: `Bearer ${idToken}` } : {})
+//     };
+
+//     try {
+//         const lastUserMessage =
+//             requestData.messages
+//                 .slice()
+//                 .reverse()
+//                 .find(m => m.role === "user")?.content || "";
+
+//         const response = await fetch("/graph", {
+//             method: "POST",
+//             headers,
+//             body: JSON.stringify({ query: lastUserMessage })
+//         });
+
+//         if (!response.ok) {
+//             const errorText = await response.text();
+//             throw new Error(`Graph RAG request failed: ${response.status} - ${errorText}`);
+//         }
+
+//         const apiData: GraphRagResponse = await response.json();
+
+//         return new Response(apiData.response?.trim() || "No response available", {
+//             status: 200,
+//             headers: { "Content-Type": "text/plain" } // 👈 Sets response as plain text
+//         });
+//     } catch (error) {
+//         console.error("Graph RAG API Error:", error.message || error);
+//         throw new Error(`Graph RAG request failed: ${error.message || "Unknown error"}`);
+//     }
+// }
+export async function graphRagApi(requestData: ChatAppRequest, shouldStream: boolean, idToken: string | undefined): Promise<Response> {
     const headers: HeadersInit = {
-      "Content-Type": "application/json",
-      ...(idToken ? { Authorization: `Bearer ${idToken}` } : {})
+        "Content-Type": "application/json",
+        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        ...(shouldStream ? { "Accept": "text/event-stream" } : {})
     };
-  
+
     try {
-      const lastUserMessage =
-        requestData.messages
-          .slice()
-          .reverse()
-          .find(m => m.role === "user")?.content || "";
-  
-      const response = await fetch("/graph", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ query: lastUserMessage })
-      });
-  
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Graph RAG request failed: ${response.status} - ${errorText}`);
-      }
-  
-      const apiData: GraphRagResponse = await response.json();
-  
-      return new Response(apiData.response?.trim() || "No response available", {
-        status: 200,
-        headers: { "Content-Type": "text/plain" } // 👈 Sets response as plain text
-      });
+        const lastUserMessage =
+            requestData.messages
+                .slice()
+                .reverse()
+                .find(m => m.role === "user")?.content || "";
+
+        const endpoint = shouldStream ? "/graph-stream" : "/graph";
+        console.log(`Requesting: ${endpoint}`);
+
+        const response = await fetch(endpoint, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ query: lastUserMessage })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Graph RAG API error response: ${errorText}`);
+            throw new Error(`Graph RAG request failed: ${response.status} - ${errorText}`);
+        }
+
+        if (shouldStream) {
+            // ✅ Handle Server-Sent Events (SSE) Stream
+            const stream = new ReadableStream({
+                async start(controller) {
+                    const reader = response.body?.getReader();
+                    if (!reader) {
+                        controller.close();
+                        return;
+                    }
+
+                    const decoder = new TextDecoder();
+                    try {
+                        while (true) {
+                            const { value, done } = await reader.read();
+                            if (done) break;
+                            const chunk = decoder.decode(value, { stream: true });
+
+                            // Stream text to frontend
+                            controller.enqueue(chunk);
+                        }
+                    } catch (error) {
+                        console.error("Error reading stream:", error);
+                    } finally {
+                        controller.close();
+                    }
+                }
+            });
+
+            return new Response(stream, {
+                status: 200,
+                headers: {
+                    "Content-Type": "text/event-stream",
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive"
+                }
+            });
+        } else {
+            // ✅ Ensure Response is Correctly Parsed
+            const text = await response.text();
+            console.log("Non-streaming API Response:", text);
+
+            let parsedData;
+            try {
+                parsedData = JSON.parse(text);
+            } catch (error) {
+                console.warn("Response is not valid JSON, returning raw text.");
+                return new Response(text.trim(), {
+                    status: 200,
+                    headers: { "Content-Type": "text/plain" }
+                });
+            }
+
+            return new Response(parsedData.response?.trim() || "No response available", {
+                status: 200,
+                headers: { "Content-Type": "application/json" }
+            });
+        }
     } catch (error) {
-      console.error("Graph RAG API Error:", error.message || error);
-      throw new Error(`Graph RAG request failed: ${error.message || "Unknown error"}`);
+        if (error instanceof Error) {
+            console.error("Graph RAG API Error:", error.message || error);
+        } else {
+            console.error("Graph RAG API Error:", error);
+        }
+        if (error instanceof Error) {
+            throw new Error(`Graph RAG request failed: ${error.message || "Unknown error"}`);
+        } else {
+            throw new Error("Graph RAG request failed: Unknown error");
+        }
     }
-  }
-  
+}
+
 
 export async function getSpeechApi(text: string): Promise<string | null> {
     return await fetch("/speech", {

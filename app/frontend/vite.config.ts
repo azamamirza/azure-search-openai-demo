@@ -58,6 +58,37 @@ export default defineConfig({
                     });
                 }
             },
+            "/graph-stream": {
+                target: "https://bg-backend-app1.azurewebsites.net",
+                changeOrigin: true,
+                secure: false,
+                ws: true, // Enable WebSocket support (sometimes needed for SSE)
+                rewrite: path => path.replace(/^\/graph-stream/, "/api/v1/stream_chat/"),
+                headers: {
+                    "X-Forwarded-Proto": "https",
+                    Accept: "text/event-stream",
+                    Connection: "keep-alive", // ✅ Ensure SSE does not close early
+                    "Cache-Control": "no-cache" // ✅ Prevent unexpected caching issues
+                },
+                configure: proxy => {
+                    proxy.on("proxyReq", (proxyReq, req, res) => {
+                        console.log(`Proxying request from ${req.url} to backend path: ${proxyReq.path}`);
+                    });
+                
+                    proxy.on("proxyRes", (proxyRes, req, res) => {
+                        console.log(`Backend response for ${req.url}: ${proxyRes.statusCode}`);
+                    });
+                
+                    proxy.on("error", (err, req, res) => {
+                        console.error("Proxy error for /graph-stream:", err);
+                        res.writeHead(500, { "Content-Type": "text/plain" });
+                        res.end("Proxy error in Vite for /graph-stream");
+                    });
+                },
+                
+                selfHandleResponse: false // Let the proxy handle the response fully
+            },
+
             "/api": {
                 target: "https://capps-backend-2775otfh6oiva.calmsand-dc0a0904.centralus.azurecontainerapps.io",
                 changeOrigin: true,

@@ -17,10 +17,10 @@ import {
     ResponseMessage,
     VectorFieldOptions,
     GPT4VInput,
-    SpeechConfig
+    SpeechConfig,
+    graphRagApi
 } from "../../api";
 import { Answer, AnswerError, AnswerLoading } from "../../components/Answer";
-import { graphRagApi } from "../../api";
 import { QuestionInput } from "../../components/QuestionInput";
 import { ExampleList } from "../../components/Example";
 import { UserChatMessage } from "../../components/UserChatMessage";
@@ -170,20 +170,20 @@ const Chat = () => {
 
     const makeApiRequest = async (question: string) => {
         lastQuestionRef.current = question;
-
+    
         error && setError(undefined);
         setIsLoading(true);
         setActiveCitation(undefined);
         setActiveAnalysisPanelTab(undefined);
-
+    
         const token = client ? await getToken(client) : undefined;
-
+    
         try {
             const messages: ResponseMessage[] = answers.flatMap(a => [
                 { content: a[0], role: "user" },
                 { content: a[1].message.content, role: "assistant" }
             ]);
-
+    
             const request: ChatAppRequest = {
                 messages: [...messages, { content: question, role: "user" }],
                 context: {
@@ -210,13 +210,14 @@ const Chat = () => {
                 },
                 session_state: answers.length ? answers[answers.length - 1][1].session_state : null
             };
-
+    
             console.log("Sending API request:", JSON.stringify(request, null, 2));
-
+    
             let response;
             if (retrievalMode === RetrievalMode.Graph) {
                 response = await graphRagApi(request, shouldStream, token);
-                // Handle Graph response differently
+    
+                // ✅ Handle Streaming Mode
                 if (shouldStream) {
                     await handleGraphStreamResponse(question, response.body);
                     return;
@@ -224,28 +225,52 @@ const Chat = () => {
             } else {
                 response = await chatApi(request, shouldStream, token);
             }
-
+    
             if (!response || (shouldStream && !response.body)) {
                 throw new Error("No response body received from API");
             }
-
+    
             if (shouldStream) {
+                // ✅ Handle Streaming Response
                 const parsedResponse: ChatAppResponse = await handleAsyncRequest(question, answers, response.body);
                 setAnswers([...answers, [question, parsedResponse]]);
+    
                 if (typeof parsedResponse.session_state === "string" && parsedResponse.session_state !== "") {
                     historyManager.addItem(parsedResponse.session_state, [...answers, [question, parsedResponse]], token);
                 }
             } else {
-                const parsedResponse: ChatAppResponseOrError = await response.json();
+                // ✅ Handle Non-Streaming Response
+                let parsedResponse: ChatAppResponseOrError;
+                const responseText = await response.text();
+                console.log("Graph RAG API Raw Response:", responseText); // Debugging log
+    
+                try {
+                    // Only parse JSON if response is valid JSON
+                    parsedResponse = JSON.parse(responseText);
+                } catch (error) {
+                    console.warn("Response is not JSON, treating as plain text.");
+                    parsedResponse = { 
+                        message: { content: responseText, role: "assistant" }, 
+                        session_state: null,
+                        delta: { content: responseText, role: "assistant" },
+                        context: {
+                            data_points: [],
+                            followup_questions: null,
+                            thoughts: []
+                        }
+                    };
+                }
+    
                 if (parsedResponse.error) {
                     throw new Error(parsedResponse.error);
                 }
+    
                 setAnswers([...answers, [question, parsedResponse as ChatAppResponse]]);
                 if (typeof parsedResponse.session_state === "string" && parsedResponse.session_state !== "") {
                     historyManager.addItem(parsedResponse.session_state, [...answers, [question, parsedResponse as ChatAppResponse]], token);
                 }
             }
-
+    
             setSpeechUrls([...speechUrls, null]);
         } catch (e) {
             console.error("Error during API request:", e);
@@ -254,6 +279,7 @@ const Chat = () => {
             setIsLoading(false);
         }
     };
+    
     const handleGraphStreamResponse = async (question: string, stream: ReadableStream | null) => {
         if (!stream) throw Error("No stream available");
     
@@ -266,8 +292,8 @@ const Chat = () => {
                 const { done, value } = await reader.read();
                 if (done) break;
                 result += decoder.decode(value, { stream: true });
-                
-                // Update UI incrementally if needed
+    
+                // Append streamed response incrementally
                 setAnswers(prev => {
                     const tempResponse: ChatAppResponse = {
                         message: { content: result, role: "assistant" },
@@ -279,15 +305,15 @@ const Chat = () => {
                             thoughts: []
                         }
                     };
-                    return [...prev, [question, tempResponse]];
+                    return [...prev.slice(0, -1), [question, tempResponse]];
                 });
             }
     
-            // Final processing
+            // Ensure final processing
             const parsedResponse: ChatAppResponse = {
-                message: { content: result, role: "assistant" },
-                session_state: null, // Add actual session state if needed
-                delta: { content: result, role: "assistant" },
+                message: { content: result.trim(), role: "assistant" },
+                session_state: null, // Add session state if needed
+                delta: { content: result.trim(), role: "assistant" },
                 context: {
                     data_points: [],
                     followup_questions: null,
@@ -295,7 +321,7 @@ const Chat = () => {
                 }
             };
     
-            setAnswers([...answers, [question, parsedResponse]]);
+            setAnswers([...answers.slice(0, -1), [question, parsedResponse]]);
         } finally {
             reader.releaseLock();
         }
