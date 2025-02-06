@@ -217,7 +217,7 @@ const Chat = () => {
             if (retrievalMode === RetrievalMode.Graph) {
                 response = await graphRagApi(request, shouldStream, token);
 
-                // ✅ Handle Streaming Mode
+                // Handle Streaming Mode
                 if (shouldStream) {
                     await handleGraphStreamResponse(question, response.body);
                     return;
@@ -231,7 +231,7 @@ const Chat = () => {
             }
 
             if (shouldStream) {
-                // ✅ Handle Streaming Response
+                //  Handle Streaming Response
                 const parsedResponse: ChatAppResponse = await handleAsyncRequest(question, answers, response.body);
                 setAnswers([...answers, [question, parsedResponse]]);
 
@@ -239,7 +239,7 @@ const Chat = () => {
                     historyManager.addItem(parsedResponse.session_state, [...answers, [question, parsedResponse]], token);
                 }
             } else {
-                // ✅ Handle Non-Streaming Response
+                //  Handle Non-Streaming Response
                 let parsedResponse: ChatAppResponseOrError;
                 const responseText = await response.text();
                 console.log("Graph RAG API Raw Response:", responseText); // Debugging log
@@ -292,7 +292,7 @@ const Chat = () => {
         let partialWord = ""; // Holds incomplete words across chunks
     
         try {
-            // ✅ Add an empty message immediately to show the start of streaming
+            //  Add an empty message immediately to show the start of streaming
             setAnswers(prev => [
                 ...prev,
                 [question, {
@@ -314,7 +314,7 @@ const Chat = () => {
     
                 const chunk = decoder.decode(value, { stream: true });
     
-                // ✅ Split lines, since SSE sends data in separate chunks
+                // Split lines, since SSE sends data in separate chunks
                 const lines = chunk.split("\n");
                 for (let line of lines) {
                     line = line.trim();
@@ -322,7 +322,7 @@ const Chat = () => {
                     if (line.startsWith("data: ")) {
                         let wordChunk = line.replace("data: ", "");
     
-                        // ✅ Fix broken words across chunks
+                        // Fix broken words across chunks
                         if (partialWord) {
                             wordChunk = partialWord + wordChunk;
                             partialWord = "";
@@ -334,12 +334,12 @@ const Chat = () => {
                             result += wordChunk + " ";
                         }
                     } else if (line.startsWith("event: nodes") || line.startsWith("data: {")) {
-                        // ✅ Skip nodes completely (ignore JSON objects from SSE)
+                        // Skip nodes completely (ignore JSON objects from SSE)
                         continue;
                     }
                 }
     
-                // ✅ Typing effect: Update the last answer progressively
+                // Typing effect: Update the last answer progressively
                 setAnswers(prev => {
                     const lastAnswer = prev.length > 0 ? prev[prev.length - 1] : [question, { message: { content: "" } }];
                     const updatedAnswer = {
@@ -351,11 +351,11 @@ const Chat = () => {
                     return [...prev.slice(0, -1), [question, updatedAnswer]];
                 });
     
-                // ✅ Simulate a delay for better UX (Optional)
+                //  Simulate a delay for better UX (Optional)
                 await new Promise(res => setTimeout(res, 50)); // 20ms delay per update
             }
     
-            // ✅ Final processing (ensure clean result, remove trailing nodes if any)
+            // Final processing (ensure clean result, remove trailing nodes if any)
             if (partialWord) {
                 result += partialWord;
                 partialWord = "";
@@ -363,7 +363,7 @@ const Chat = () => {
     
             result = result.replace(/\{.*"nodes":\s*\[.*\]\}/g, "").trim(); // Remove nodes JSON if still present
     
-            // ✅ Ensure the final message is fully updated
+            //  Ensure the final message is fully updated
             setAnswers(prev => {
                 const lastAnswer = prev.length > 0 ? prev[prev.length - 1] : [question, { message: { content: "" } }];
                 const updatedAnswer = {

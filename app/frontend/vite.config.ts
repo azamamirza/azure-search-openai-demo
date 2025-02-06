@@ -43,7 +43,8 @@ export default defineConfig({
                 target: "https://bg-backend-app1.azurewebsites.net",
                 changeOrigin: true,
                 secure: false,
-                rewrite: path => path.replace(/^\/graph/, ""), // ✅ Keep endpoint flexibility
+                ws: true,
+                rewrite: path => path.replace(/^\/graph/, ""), 
                 headers: {
                     "X-Forwarded-Proto": "https"
                 }
@@ -52,7 +53,7 @@ export default defineConfig({
                 target: "https://bg-backend-app1.azurewebsites.net",
                 changeOrigin: true,
                 secure: false,
-                ws: true, // ✅ Enable WebSockets support (sometimes required for SSE)
+                ws: true, //  Enable WebSockets support (sometimes required for SSE)
                 rewrite: path => path.replace(/^\/graph-stream/, "/api/v1/stream_chat/"),
                 headers: {
                     "X-Forwarded-Proto": "https",
@@ -84,7 +85,7 @@ export default defineConfig({
                 changeOrigin: true,
                 secure: false,
                 ws: true,
-                rewrite: path => path.replace(/^\/api/, "") // Remove "/api" prefix if needed
+                rewrite: path => path.replace(/^\/api/, "") 
             }
         }
     }

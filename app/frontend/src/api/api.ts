@@ -67,41 +67,6 @@ export async function chatApi(request: ChatAppRequest, shouldStream: boolean, id
         body: JSON.stringify(request)
     });
 }
-// export async function graphRagApi(requestData: ChatAppRequest, shouldStream: boolean, idToken: string | undefined): Promise<Response> {
-//     const headers: HeadersInit = {
-//         "Content-Type": "application/json",
-//         ...(idToken ? { Authorization: `Bearer ${idToken}` } : {})
-//     };
-
-//     try {
-//         const lastUserMessage =
-//             requestData.messages
-//                 .slice()
-//                 .reverse()
-//                 .find(m => m.role === "user")?.content || "";
-
-//         const response = await fetch("/graph", {
-//             method: "POST",
-//             headers,
-//             body: JSON.stringify({ query: lastUserMessage })
-//         });
-
-//         if (!response.ok) {
-//             const errorText = await response.text();
-//             throw new Error(`Graph RAG request failed: ${response.status} - ${errorText}`);
-//         }
-
-//         const apiData: GraphRagResponse = await response.json();
-
-//         return new Response(apiData.response?.trim() || "No response available", {
-//             status: 200,
-//             headers: { "Content-Type": "text/plain" } // 👈 Sets response as plain text
-//         });
-//     } catch (error) {
-//         console.error("Graph RAG API Error:", error.message || error);
-//         throw new Error(`Graph RAG request failed: ${error.message || "Unknown error"}`);
-//     }
-// }
 export async function graphRagApi(requestData: ChatAppRequest, shouldStream: boolean, idToken: string | undefined): Promise<Response> {
     const headers: HeadersInit = {
         "Content-Type": "application/json",
@@ -137,7 +102,7 @@ export async function graphRagApi(requestData: ChatAppRequest, shouldStream: boo
                 throw new Error("No response body available for streaming");
             }
 
-            // ✅ Handle Server-Sent Events (SSE) Stream
+            //  Handle Server-Sent Events (SSE) Stream
             return new Response(response.body, {
                 status: 200,
                 headers: {
@@ -147,7 +112,7 @@ export async function graphRagApi(requestData: ChatAppRequest, shouldStream: boo
                 }
             });
         } else {
-            // ✅ Ensure Response is Correctly Parsed
+            //  Ensure Response is Correctly Parsed
             const text = await response.text();
             console.log("Non-streaming API Response:", text);
 
