@@ -594,7 +594,7 @@ const Chat = () => {
                             placeholder={t("defaultExamples.placeholder")}
                             disabled={isLoading}
                             onSend={question => makeApiRequest(question)}
-                            showSpeechInput={showSpeechInput}
+                            showSpeechInput={true}
                         />
                     </div>
                 </div>
