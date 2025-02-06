@@ -292,6 +292,21 @@ const Chat = () => {
         let partialWord = ""; // Holds incomplete words across chunks
     
         try {
+            // ✅ Add an empty message immediately to show the start of streaming
+            setAnswers(prev => [
+                ...prev,
+                [question, {
+                    message: { content: "", role: "assistant" }, // Empty content for typing effect
+                    session_state: null,
+                    delta: { content: "", role: "assistant" },
+                    context: {
+                        data_points: [],
+                        followup_questions: [],
+                        thoughts: []
+                    }
+                }]
+            ]);
+    
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
@@ -299,7 +314,7 @@ const Chat = () => {
     
                 const chunk = decoder.decode(value, { stream: true });
     
-                // ✅ Split lines since SSE sends data in separate chunks
+                // ✅ Split lines, since SSE sends data in separate chunks
                 const lines = chunk.split("\n");
                 for (let line of lines) {
                     line = line.trim();
@@ -324,22 +339,20 @@ const Chat = () => {
                     }
                 }
     
-                // ✅ Ensure short messages (like "Hello") don't get skipped
-                if (result.trim().length > 0) {
-                    setAnswers(prev => [
-                        ...prev,
-                        [question, {
-                            message: { content: result.trim(), role: "assistant" },
-                            session_state: null,
-                            delta: { content: result.trim(), role: "assistant" },
-                            context: {
-                                data_points: [],
-                                followup_questions: [],
-                                thoughts: []
-                            }
-                        }]
-                    ]);
-                }
+                // ✅ Typing effect: Update the last answer progressively
+                setAnswers(prev => {
+                    const lastAnswer = prev.length > 0 ? prev[prev.length - 1] : [question, { message: { content: "" } }];
+                    const updatedAnswer = {
+                        ...lastAnswer[1],
+                        message: { content: result.trim(), role: "assistant" },
+                        delta: { content: result.trim(), role: "assistant" }
+                    };
+    
+                    return [...prev.slice(0, -1), [question, updatedAnswer]];
+                });
+    
+                // ✅ Simulate a delay for better UX (Optional)
+                await new Promise(res => setTimeout(res, 50)); // 20ms delay per update
             }
     
             // ✅ Final processing (ensure clean result, remove trailing nodes if any)
@@ -348,31 +361,31 @@ const Chat = () => {
                 partialWord = "";
             }
     
-            // **🔥 Final Check to Remove Any JSON Nodes from String**
             result = result.replace(/\{.*"nodes":\s*\[.*\]\}/g, "").trim(); // Remove nodes JSON if still present
     
-            setAnswers(prev => [
-                ...prev,
-                [question, {
+            // ✅ Ensure the final message is fully updated
+            setAnswers(prev => {
+                const lastAnswer = prev.length > 0 ? prev[prev.length - 1] : [question, { message: { content: "" } }];
+                const updatedAnswer = {
+                    ...lastAnswer[1],
                     message: { content: result.trim(), role: "assistant" },
-                    session_state: null,
-                    delta: { content: result.trim(), role: "assistant" },
-                    context: {
-                        data_points: [],
-                        followup_questions: [],
-                        thoughts: []
-                    }
-                }]
-            ]);
+                    delta: { content: result.trim(), role: "assistant" }
+                };
+    
+                return [...prev.slice(0, -1), [question, updatedAnswer]];
+            });
         } catch (error) {
             console.error("Streaming error:", error);
-            throw new Error(`Streaming failed: ${error.message || error}`);
+            if (error instanceof Error) {
+                throw new Error(`Streaming failed: ${error.message}`);
+            } else {
+                throw new Error("Streaming failed: Unknown error");
+            }
         } finally {
             reader.releaseLock();
         }
     };
     
-
 
     const clearChat = () => {
         lastQuestionRef.current = "";
