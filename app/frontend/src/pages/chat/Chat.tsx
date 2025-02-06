@@ -170,20 +170,20 @@ const Chat = () => {
 
     const makeApiRequest = async (question: string) => {
         lastQuestionRef.current = question;
-    
+
         error && setError(undefined);
         setIsLoading(true);
         setActiveCitation(undefined);
         setActiveAnalysisPanelTab(undefined);
-    
+
         const token = client ? await getToken(client) : undefined;
-    
+
         try {
             const messages: ResponseMessage[] = answers.flatMap(a => [
                 { content: a[0], role: "user" },
                 { content: a[1].message.content, role: "assistant" }
             ]);
-    
+
             const request: ChatAppRequest = {
                 messages: [...messages, { content: question, role: "user" }],
                 context: {
@@ -210,13 +210,13 @@ const Chat = () => {
                 },
                 session_state: answers.length ? answers[answers.length - 1][1].session_state : null
             };
-    
+
             console.log("Sending API request:", JSON.stringify(request, null, 2));
-    
+
             let response;
             if (retrievalMode === RetrievalMode.Graph) {
                 response = await graphRagApi(request, shouldStream, token);
-    
+
                 // ✅ Handle Streaming Mode
                 if (shouldStream) {
                     await handleGraphStreamResponse(question, response.body);
@@ -225,16 +225,16 @@ const Chat = () => {
             } else {
                 response = await chatApi(request, shouldStream, token);
             }
-    
+
             if (!response || (shouldStream && !response.body)) {
                 throw new Error("No response body received from API");
             }
-    
+
             if (shouldStream) {
                 // ✅ Handle Streaming Response
                 const parsedResponse: ChatAppResponse = await handleAsyncRequest(question, answers, response.body);
                 setAnswers([...answers, [question, parsedResponse]]);
-    
+
                 if (typeof parsedResponse.session_state === "string" && parsedResponse.session_state !== "") {
                     historyManager.addItem(parsedResponse.session_state, [...answers, [question, parsedResponse]], token);
                 }
@@ -243,14 +243,14 @@ const Chat = () => {
                 let parsedResponse: ChatAppResponseOrError;
                 const responseText = await response.text();
                 console.log("Graph RAG API Raw Response:", responseText); // Debugging log
-    
+
                 try {
                     // Only parse JSON if response is valid JSON
                     parsedResponse = JSON.parse(responseText);
                 } catch (error) {
                     console.warn("Response is not JSON, treating as plain text.");
-                    parsedResponse = { 
-                        message: { content: responseText, role: "assistant" }, 
+                    parsedResponse = {
+                        message: { content: responseText, role: "assistant" },
                         session_state: null,
                         delta: { content: responseText, role: "assistant" },
                         context: {
@@ -260,17 +260,17 @@ const Chat = () => {
                         }
                     };
                 }
-    
+
                 if (parsedResponse.error) {
                     throw new Error(parsedResponse.error);
                 }
-    
+
                 setAnswers([...answers, [question, parsedResponse as ChatAppResponse]]);
                 if (typeof parsedResponse.session_state === "string" && parsedResponse.session_state !== "") {
                     historyManager.addItem(parsedResponse.session_state, [...answers, [question, parsedResponse as ChatAppResponse]], token);
                 }
             }
-    
+
             setSpeechUrls([...speechUrls, null]);
         } catch (e) {
             console.error("Error during API request:", e);
@@ -279,53 +279,100 @@ const Chat = () => {
             setIsLoading(false);
         }
     };
-    
+
     const handleGraphStreamResponse = async (question: string, stream: ReadableStream | null) => {
-        if (!stream) throw Error("No stream available");
+        if (!stream) {
+            console.error("Streaming error: No stream available");
+            throw new Error("No stream available");
+        }
     
         const reader = stream.getReader();
         const decoder = new TextDecoder();
+        let result = "";
+        let partialWord = ""; // Holds incomplete words across chunks
     
         try {
-            let result = '';
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
-                result += decoder.decode(value, { stream: true });
+                if (!value) continue;
     
-                // Append streamed response incrementally
-                setAnswers(prev => {
-                    const tempResponse: ChatAppResponse = {
-                        message: { content: result, role: "assistant" },
-                        session_state: null,
-                        delta: { content: result, role: "assistant" },
-                        context: {
-                            data_points: [],
-                            followup_questions: [],
-                            thoughts: []
+                const chunk = decoder.decode(value, { stream: true });
+    
+                // ✅ Split lines since SSE sends data in separate chunks
+                const lines = chunk.split("\n");
+                for (let line of lines) {
+                    line = line.trim();
+    
+                    if (line.startsWith("data: ")) {
+                        let wordChunk = line.replace("data: ", "");
+    
+                        // ✅ Fix broken words across chunks
+                        if (partialWord) {
+                            wordChunk = partialWord + wordChunk;
+                            partialWord = "";
                         }
-                    };
-                    return [...prev.slice(0, -1), [question, tempResponse]];
-                });
+    
+                        if (!wordChunk.endsWith(" ") && !wordChunk.endsWith(".")) {
+                            partialWord = wordChunk; // Store partial word for next chunk
+                        } else {
+                            result += wordChunk + " ";
+                        }
+                    } else if (line.startsWith("event: nodes") || line.startsWith("data: {")) {
+                        // ✅ Skip nodes completely (ignore JSON objects from SSE)
+                        continue;
+                    }
+                }
+    
+                // ✅ Ensure short messages (like "Hello") don't get skipped
+                if (result.trim().length > 0) {
+                    setAnswers(prev => [
+                        ...prev,
+                        [question, {
+                            message: { content: result.trim(), role: "assistant" },
+                            session_state: null,
+                            delta: { content: result.trim(), role: "assistant" },
+                            context: {
+                                data_points: [],
+                                followup_questions: [],
+                                thoughts: []
+                            }
+                        }]
+                    ]);
+                }
             }
     
-            // Ensure final processing
-            const parsedResponse: ChatAppResponse = {
-                message: { content: result.trim(), role: "assistant" },
-                session_state: null, // Add session state if needed
-                delta: { content: result.trim(), role: "assistant" },
-                context: {
-                    data_points: [],
-                    followup_questions: null,
-                    thoughts: []
-                }
-            };
+            // ✅ Final processing (ensure clean result, remove trailing nodes if any)
+            if (partialWord) {
+                result += partialWord;
+                partialWord = "";
+            }
     
-            setAnswers([...answers.slice(0, -1), [question, parsedResponse]]);
+            // **🔥 Final Check to Remove Any JSON Nodes from String**
+            result = result.replace(/\{.*"nodes":\s*\[.*\]\}/g, "").trim(); // Remove nodes JSON if still present
+    
+            setAnswers(prev => [
+                ...prev,
+                [question, {
+                    message: { content: result.trim(), role: "assistant" },
+                    session_state: null,
+                    delta: { content: result.trim(), role: "assistant" },
+                    context: {
+                        data_points: [],
+                        followup_questions: [],
+                        thoughts: []
+                    }
+                }]
+            ]);
+        } catch (error) {
+            console.error("Streaming error:", error);
+            throw new Error(`Streaming failed: ${error.message || error}`);
         } finally {
             reader.releaseLock();
         }
     };
+    
+
 
     const clearChat = () => {
         lastQuestionRef.current = "";

@@ -43,50 +43,40 @@ export default defineConfig({
                 target: "https://bg-backend-app1.azurewebsites.net",
                 changeOrigin: true,
                 secure: false,
-                rewrite: path => path.replace(/^\/graph/, "/api/v1/query/"), // Keep trailing slash
+                rewrite: path => path.replace(/^\/graph/, ""), // ✅ Keep endpoint flexibility
                 headers: {
-                    // Force HTTPS in forwarded headers
                     "X-Forwarded-Proto": "https"
-                },
-                configure: proxy => {
-                    proxy.on("proxyRes", proxyRes => {
-                        // Fix redirect location to HTTPS
-                        const location = proxyRes.headers.location;
-                        if (location?.startsWith("http://")) {
-                            proxyRes.headers.location = location.replace("http://", "https://");
-                        }
-                    });
                 }
             },
             "/graph-stream": {
                 target: "https://bg-backend-app1.azurewebsites.net",
                 changeOrigin: true,
                 secure: false,
-                ws: true, // Enable WebSocket support (sometimes needed for SSE)
+                ws: true, // ✅ Enable WebSockets support (sometimes required for SSE)
                 rewrite: path => path.replace(/^\/graph-stream/, "/api/v1/stream_chat/"),
                 headers: {
                     "X-Forwarded-Proto": "https",
                     Accept: "text/event-stream",
-                    Connection: "keep-alive", // ✅ Ensure SSE does not close early
-                    "Cache-Control": "no-cache" // ✅ Prevent unexpected caching issues
+                    Connection: "keep-alive",
+                    "Cache-Control": "no-cache"
                 },
                 configure: proxy => {
                     proxy.on("proxyReq", (proxyReq, req, res) => {
-                        console.log(`Proxying request from ${req.url} to backend path: ${proxyReq.path}`);
+                        console.log(`Proxying request from ${req.url} to backend: ${proxyReq.path}`);
+                        proxyReq.setHeader("Accept", "text/event-stream");
+                        proxyReq.setHeader("Connection", "keep-alive");
                     });
-                
+
                     proxy.on("proxyRes", (proxyRes, req, res) => {
-                        console.log(`Backend response for ${req.url}: ${proxyRes.statusCode}`);
+                        console.log(`Backend responded for ${req.url} with status: ${proxyRes.statusCode}`);
                     });
-                
+
                     proxy.on("error", (err, req, res) => {
                         console.error("Proxy error for /graph-stream:", err);
                         res.writeHead(500, { "Content-Type": "text/plain" });
                         res.end("Proxy error in Vite for /graph-stream");
                     });
-                },
-                
-                selfHandleResponse: false // Let the proxy handle the response fully
+                }
             },
 
             "/api": {

@@ -116,7 +116,7 @@ export async function graphRagApi(requestData: ChatAppRequest, shouldStream: boo
                 .reverse()
                 .find(m => m.role === "user")?.content || "";
 
-        const endpoint = shouldStream ? "/graph-stream" : "/graph";
+        const endpoint = shouldStream ? "/graph/api/v1/stream_chat/" : "/graph/api/v1/query/";
         console.log(`Requesting: ${endpoint}`);
 
         const response = await fetch(endpoint, {
@@ -132,34 +132,13 @@ export async function graphRagApi(requestData: ChatAppRequest, shouldStream: boo
         }
 
         if (shouldStream) {
+            if (!response.body) {
+                console.error("Streaming error: Response body is null");
+                throw new Error("No response body available for streaming");
+            }
+
             // ✅ Handle Server-Sent Events (SSE) Stream
-            const stream = new ReadableStream({
-                async start(controller) {
-                    const reader = response.body?.getReader();
-                    if (!reader) {
-                        controller.close();
-                        return;
-                    }
-
-                    const decoder = new TextDecoder();
-                    try {
-                        while (true) {
-                            const { value, done } = await reader.read();
-                            if (done) break;
-                            const chunk = decoder.decode(value, { stream: true });
-
-                            // Stream text to frontend
-                            controller.enqueue(chunk);
-                        }
-                    } catch (error) {
-                        console.error("Error reading stream:", error);
-                    } finally {
-                        controller.close();
-                    }
-                }
-            });
-
-            return new Response(stream, {
+            return new Response(response.body, {
                 status: 200,
                 headers: {
                     "Content-Type": "text/event-stream",
@@ -190,12 +169,12 @@ export async function graphRagApi(requestData: ChatAppRequest, shouldStream: boo
         }
     } catch (error) {
         if (error instanceof Error) {
-            console.error("Graph RAG API Error:", error.message || error);
+            console.error("Graph RAG API Error:", error.message);
         } else {
             console.error("Graph RAG API Error:", error);
         }
         if (error instanceof Error) {
-            throw new Error(`Graph RAG request failed: ${error.message || "Unknown error"}`);
+            throw new Error(`Graph RAG request failed: ${error.message}`);
         } else {
             throw new Error("Graph RAG request failed: Unknown error");
         }
