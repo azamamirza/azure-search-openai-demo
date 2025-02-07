@@ -289,14 +289,14 @@ const Chat = () => {
         const reader = stream.getReader();
         const decoder = new TextDecoder();
         let result = "";
-        let partialWord = ""; // Holds incomplete words across chunks
+        const charDelay = 20; // Delay between characters in ms
     
         try {
-            //  Add an empty message immediately to show the start of streaming
+            // Add empty initial message for immediate UI response
             setAnswers(prev => [
                 ...prev,
                 [question, {
-                    message: { content: "", role: "assistant" }, // Empty content for typing effect
+                    message: { content: "", role: "assistant" },
                     session_state: null,
                     delta: { content: "", role: "assistant" },
                     context: {
@@ -313,78 +313,60 @@ const Chat = () => {
                 if (!value) continue;
     
                 const chunk = decoder.decode(value, { stream: true });
-    
-                // Split lines, since SSE sends data in separate chunks
                 const lines = chunk.split("\n");
+    
                 for (let line of lines) {
                     line = line.trim();
+                    
+                    // Completely ignore any node-related data
+                    if (line.startsWith("event: nodes") || line.includes('"nodes":')) {
+                        continue; // Skip this line completely
+                    }
     
                     if (line.startsWith("data: ")) {
-                        let wordChunk = line.replace("data: ", "");
+                        const wordChunk = line.replace("data: ", "");
+                        
+                        // Process each character individually
+                        for (const char of wordChunk) {
+                            result += char;
+                            
+                            // Update UI for each character
+                            setAnswers(prev => {
+                                const lastEntry = prev[prev.length - 1];
+                                const updatedEntry: Answer = {
+                                    ...lastEntry[1],
+                                    message: { content: result, role: "assistant" },
+                                    delta: { content: char, role: "assistant" }
+                                };
+                                return [...prev.slice(0, -1), [question, updatedEntry]];
+                            });
     
-                        // Fix broken words across chunks
-                        if (partialWord) {
-                            wordChunk = partialWord + wordChunk;
-                            partialWord = "";
+                            // Add delay between characters
+                            await new Promise(res => setTimeout(res, charDelay));
                         }
-    
-                        if (!wordChunk.endsWith(" ") && !wordChunk.endsWith(".")) {
-                            partialWord = wordChunk; // Store partial word for next chunk
-                        } else {
-                            result += wordChunk + " ";
-                        }
-                    } else if (line.startsWith("event: nodes") || line.startsWith("data: {")) {
-                        // Skip nodes completely (ignore JSON objects from SSE)
-                        continue;
                     }
                 }
-    
-                // Typing effect: Update the last answer progressively
-                setAnswers(prev => {
-                    const lastAnswer = prev.length > 0 ? prev[prev.length - 1] : [question, { message: { content: "" } }];
-                    const updatedAnswer = {
-                        ...lastAnswer[1],
-                        message: { content: result.trim(), role: "assistant" },
-                        delta: { content: result.trim(), role: "assistant" }
-                    };
-    
-                    return [...prev.slice(0, -1), [question, updatedAnswer]];
-                });
-    
-                //  Simulate a delay for better UX (Optional)
-                await new Promise(res => setTimeout(res, 50)); // 20ms delay per update
             }
     
-            // Final processing (ensure clean result, remove trailing nodes if any)
-            if (partialWord) {
-                result += partialWord;
-                partialWord = "";
-            }
-    
-            result = result.replace(/\{.*"nodes":\s*\[.*\]\}/g, "").trim(); // Remove nodes JSON if still present
-    
-            //  Ensure the final message is fully updated
+            // Final cleanup (this should now be unnecessary, but keeping it for safety)
+            const finalResult = result.replace(/\{.*"nodes":\s*\[.*\]\}/g, "").trim();
             setAnswers(prev => {
-                const lastAnswer = prev.length > 0 ? prev[prev.length - 1] : [question, { message: { content: "" } }];
-                const updatedAnswer = {
-                    ...lastAnswer[1],
-                    message: { content: result.trim(), role: "assistant" },
-                    delta: { content: result.trim(), role: "assistant" }
+                const lastEntry = prev[prev.length - 1];
+                const updatedEntry: Answer = {
+                    ...lastEntry[1],
+                    message: { content: finalResult, role: "assistant" },
+                    delta: { content: finalResult, role: "assistant" }
                 };
-    
-                return [...prev.slice(0, -1), [question, updatedAnswer]];
+                return [...prev.slice(0, -1), [question, updatedEntry]];
             });
         } catch (error) {
             console.error("Streaming error:", error);
-            if (error instanceof Error) {
-                throw new Error(`Streaming failed: ${error.message}`);
-            } else {
-                throw new Error("Streaming failed: Unknown error");
-            }
+            throw new Error(`Streaming failed: ${error instanceof Error ? error.message : "Unknown error"}`);
         } finally {
             reader.releaseLock();
         }
     };
+    
     
 
     const clearChat = () => {
