@@ -81,7 +81,7 @@ export async function graphRagApi(requestData: ChatAppRequest, shouldStream: boo
                 .reverse()
                 .find(m => m.role === "user")?.content || "";
 
-        const endpoint = shouldStream ? "/graph/api/v1/stream_chat/" : "/graph/api/v1/query/";
+        const endpoint = shouldStream ? "/graph/api/v1/property_graph/stream_chat/" : "/graph/api/v1/property_graph/query/";
         console.log(`Requesting: ${endpoint}`);
 
         const response = await fetch(endpoint, {
