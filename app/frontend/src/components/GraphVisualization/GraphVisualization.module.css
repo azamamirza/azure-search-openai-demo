@@ -1,0 +1,9 @@
+.graphVisualization {
+    height: 250px;
+    width: 80%;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    
+    margin-left: 20%;
+    background-color: rgb(249, 249, 249);
+}
