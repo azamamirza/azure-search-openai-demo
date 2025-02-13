@@ -8,6 +8,7 @@
     outline: transparent solid 0.0625em;
 }
 
+
 .answerLogo {
     font-size: 1.75em;
 }
@@ -141,3 +142,4 @@ sup {
     content: "";
     animation: loading 1s infinite;
 }
+
