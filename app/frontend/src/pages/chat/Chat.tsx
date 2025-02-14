@@ -280,22 +280,17 @@ const Chat = () => {
         }
     };
 
-// Enhanced handleGraphStreamResponse and adjusted output for GraphVisualization compatibility
 const handleGraphStreamResponse = async (question, stream) => {
     if (!stream) throw new Error("No stream available");
 
     const reader = stream.getReader();
     const decoder = new TextDecoder();
     let result = "";
-    let nodes = [];
-    let edges = [];
+    const graphRelations = new Set(); // Use Set for unique nodes
     const charDelay = 20;
 
-    // Regex to parse nodes and edges from relations
-    const relationRegex = /^\s*([\w\s\-]+)\s*->\s*([\w\s\-]+)\s*->\s*(.+)$/;
-
     try {
-        setAnswers(prev => [...prev, [question, { message: { content: "", role: "assistant" }, context: { nodes: [], edges: [] } }]]);
+        setAnswers(prev => [...prev, [question, { message: { content: "", role: "assistant" }, context: { data_points: [] } }]]);
 
         while (true) {
             const { done, value } = await reader.read();
@@ -306,42 +301,44 @@ const handleGraphStreamResponse = async (question, stream) => {
             for (let line of lines) {
                 line = line.trim();
 
-                // Parse valid relations for graph visualization
-                const match = line.match(relationRegex);
-                if (match) {
-                    const [_, source, label, target] = match;
-                    if (!nodes.find(n => n.id === source)) {
-                        nodes.push({ id: source, label: source });
+                // Collect all node relations from events
+                if (line.startsWith("event: nodes") || line.includes('"nodes":')) {
+                    try {
+                        const parsed = JSON.parse(line.replace(/^data:/, '').trim());
+                        if (Array.isArray(parsed.nodes)) {
+                            parsed.nodes.forEach(node => graphRelations.add(node));
+                        }
+                    } catch (e) {
+                        console.warn("Node parsing error:", e);
                     }
-                    if (!nodes.find(n => n.id === target)) {
-                        nodes.push({ id: target, label: target });
-                    }
-                    edges.push({ from: source, to: target, label });
                     continue;
                 }
 
-                // Stream textual response
+                // Stream textual response character-by-character
                 if (line.startsWith("data: ")) {
-                    const textChunk = line.replace("data: ", "");
-                    result += textChunk + ' ';
-                    setAnswers(prev => {
-                        const lastEntry = prev[prev.length - 1];
-                        return [...prev.slice(0, -1), [question, {
-                            ...lastEntry[1],
-                            message: { content: result.trim(), role: "assistant" }
-                        }]];
-                    });
+                    const wordChunk = line.replace("data: ", "");
+                    for (const char of wordChunk) {
+                        result += char;
+                        setAnswers(prev => {
+                            const lastEntry = prev[prev.length - 1];
+                            return [...prev.slice(0, -1), [question, {
+                                ...lastEntry[1],
+                                message: { content: result, role: "assistant" }
+                            }]];
+                        });
+                        await new Promise(res => setTimeout(res, charDelay));
+                    }
                 }
             }
         }
 
-        // Pass parsed nodes and edges to GraphVisualization
+        // Pass all collected nodes to GraphVisualization
         setAnswers(prev => {
             const lastEntry = prev[prev.length - 1];
             return [...prev.slice(0, -1), [question, {
                 ...lastEntry[1],
-                message: { content: result.trim() || "Graph nodes generated." },
-                context: { ...lastEntry[1].context, nodes, edges }
+                message: { content: result.trim() || "Response completed." },
+                context: { ...lastEntry[1].context, data_points: Array.from(graphRelations) }
             }]];
         });
     } catch (error) {
