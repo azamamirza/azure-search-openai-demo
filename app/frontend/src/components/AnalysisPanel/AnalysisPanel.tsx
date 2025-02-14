@@ -35,19 +35,13 @@ export const AnalysisPanel = ({ answer, activeTab, activeCitation, citationHeigh
             <PivotItem itemKey={AnalysisPanelTabs.SupportingContentTab} headerText={t("headerTexts.supportingContent")}> 
                 <SupportingContent supportingContent={answer.context.data_points} />
             </PivotItem>
-            <PivotItem itemKey={AnalysisPanelTabs.CitationTab} headerText={t("headerTexts.citation")} disabled={isDisabledCitationTab}>
+            <PivotItem itemKey={AnalysisPanelTabs.CitationTab} headerText={t("headerTexts.citation")}>
                 {activeCitation && <MarkdownViewer src={activeCitation} />}
             </PivotItem>
             <PivotItem itemKey={AnalysisPanelTabs.GraphVisualization} headerText={t("Graph")}>
                 <GraphVisualization
                     relations={answer.context.data_points || []}
                 />
-            </PivotItem>
-
-
-            <PivotItem itemKey={AnalysisPanelTabs.GraphVisualization} headerText={t("Graph")} 
-                headerButtonProps={isDisabledGraphTab ? { disabled: false, style: { color: 'grey' } } : undefined}>
-                <GraphVisualization nodes={answer.context.graphData?.nodes ?? []} edges={answer.context.graphData?.edges ?? []} />
             </PivotItem>
         </Pivot>
     );

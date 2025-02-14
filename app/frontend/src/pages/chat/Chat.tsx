@@ -280,99 +280,116 @@ const Chat = () => {
         }
     };
 
-    // Improved handleGraphStreamResponse to handle nodes and display graph visualization
-// Fully corrected handleGraphStreamResponse to restore supporting content and graph visualization
-// Corrected handleGraphStreamResponse to fix SupportingContent parser issue
-const handleGraphStreamResponse = async (question, stream) => {
+   // Fully corrected handleGraphStreamResponse to fix GraphVisualization rendering
+   const handleGraphStreamResponse = async (question, stream) => {
     if (!stream) throw new Error("No stream available");
 
     const reader = stream.getReader();
     const decoder = new TextDecoder();
-    let result = "";
-    const nodes = new Map();
-    const edges = [];
+    let textResult = "";
     const charDelay = 20;
 
-    const relationRegex = /^\s*([^\->]+)\s*->\s*([^\->]+)\s*->\s*(.+)$/;
-
     try {
+        // Initialize answer with proper structure
         setAnswers(prev => [
             ...prev,
             [question, {
                 message: { content: "", role: "assistant" },
-                context: { data_points: [], nodes: [], edges: [] }
+                context: { 
+                    data_points: [],  // This should hold relationship strings
+                    followup_questions: [],
+                    thoughts: [] 
+                }
             }]
         ]);
 
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
+            
             const chunk = decoder.decode(value, { stream: true });
             const lines = chunk.split("\n");
 
             for (let line of lines) {
                 line = line.trim();
 
-                // Handle nodes for graph visualization
-                if (line.includes('"nodes":')) {
+                // Handle graph data with nodes
+                if (line.startsWith("data: {")) {
                     try {
-                        const jsonData = JSON.parse(line.replace(/^data:/, '').trim());
-                        if (Array.isArray(jsonData.nodes)) {
-                            jsonData.nodes.forEach(relation => {
-                                const match = relation.match(relationRegex);
-                                if (match) {
-                                    const [_, source, label, target] = match.map(s => s.trim());
-                                    if (!nodes.has(source)) nodes.set(source, { id: source, label: source });
-                                    if (!nodes.has(target)) nodes.set(target, { id: target, label: target });
-                                    edges.push({ from: source, to: target, label });
-                                }
-                            });
+                        const jsonData = JSON.parse(line.replace("data: ", ""));
+                        if (jsonData?.nodes) {
+                            const newRelations = jsonData.nodes
+                                .filter(relation => typeof relation === 'string')
+                                .map(relation => relation.replace(/\s+/g, ' ').trim());
+
+                            if (newRelations.length > 0) {
+                                setAnswers(prev => {
+                                    const lastEntry = prev[prev.length - 1];
+                                    const existing = lastEntry[1].context.data_points;
+                                    const uniqueRelations = [...new Set([...existing, ...newRelations])];
+                                    
+                                    return prev.map((entry, idx) => 
+                                        idx === prev.length - 1 
+                                            ? [question, {
+                                                ...entry[1],
+                                                context: {
+                                                    ...entry[1].context,
+                                                    data_points: uniqueRelations
+                                                }
+                                            }]
+                                            : entry
+                                    );
+                                });
+                            }
                         }
                     } catch (e) {
-                        console.warn("Failed to parse node JSON:", e);
+                        console.warn("Graph data parse error:", e);
                     }
-                    continue;
                 }
-
-                // Collect and stream textual response with type check
-                if (line.startsWith("data: ")) {
+                // Handle text content
+                else if (line.startsWith("data: ")) {
                     const textChunk = line.replace("data: ", "");
-                    if (typeof textChunk === 'string') {
-                        result += textChunk;
+                    for (const char of textChunk) {
+                        textResult += char;
+                        setAnswers(prev => {
+                            const lastEntry = prev[prev.length - 1];
+                            return prev.map((entry, idx) => 
+                                idx === prev.length - 1 
+                                    ? [question, {
+                                        ...entry[1],
+                                        message: { 
+                                            content: textResult, 
+                                            role: "assistant" 
+                                        }
+                                    }]
+                                    : entry
+                            );
+                        });
+                        await new Promise(res => setTimeout(res, charDelay));
                     }
-                    setAnswers(prev => {
-                        const lastEntry = prev.at(-1) || [question, {}];
-                        return [...prev.slice(0, -1), [question, {
-                            ...lastEntry[1],
-                            message: { content: result, role: "assistant" }
-                        }]];
-                    });
                 }
             }
         }
 
-        // Pass results to visualization and supporting content tabs with proper array checks
-        setAnswers(prev => {
-            const lastEntry = prev.at(-1) || [question, {}];
-            return [...prev.slice(0, -1), [question, {
-                ...lastEntry[1],
-                message: { content: result.trim() || "Response completed." },
-                context: {
-                    ...lastEntry[1]?.context,
-                    data_points: Array.from(nodes.values()).map(node => `${node.id}: ${node.label}`),
-                    nodes: Array.from(nodes.values()),
-                    edges: edges.length ? edges : [{ from: 'No', to: 'Data', label: 'Available' }]
-                }
-            }]];
-        });
+        // Final cleanup
+        setAnswers(prev => prev.map((entry, idx) => 
+            idx === prev.length - 1 
+                ? [question, {
+                    ...entry[1],
+                    message: { 
+                        content: textResult.trim(), 
+                        role: "assistant" 
+                    }
+                }]
+                : entry
+        ));
+
     } catch (error) {
         console.error("Streaming error:", error);
     } finally {
         reader.releaseLock();
     }
 };
-
-
 
     const clearChat = () => {
         lastQuestionRef.current = "";
