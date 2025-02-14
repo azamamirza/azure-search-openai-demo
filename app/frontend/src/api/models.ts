@@ -53,6 +53,9 @@ export type Thoughts = {
 };
 
 export type ResponseContext = {
+    [x: string]: any;
+    graph: any;
+    graphData: any;
     data_points: string[];
     followup_questions: string[] | null;
     thoughts: Thoughts[];

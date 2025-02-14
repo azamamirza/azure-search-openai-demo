@@ -1,9 +1,17 @@
 .graphVisualization {
-    height: 250px;
-    width: 80%;
-    border: 1px solid #ddd;
-    border-radius: 8px;
+    height: 100%;
+    width: 100%;
+    min-height: 400px;
+    border: 1px solid #ccc;
+    background-color: #f9f9f9;
+    padding-top: 10%;
     
-    margin-left: 20%;
-    background-color: rgb(249, 249, 249);
-}
+  }
+  
+  .emptyMessage {
+    text-align: center;
+    padding: 20px;
+    color: #777;
+    font-style: italic;
+  }
+  

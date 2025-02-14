@@ -1,7 +1,5 @@
 import { useRef, useState, useEffect, useContext } from "react";
 import { useTranslation } from "react-i18next";
-import { Network } from "vis-network";
-import { DataSet } from "vis-data";
 import { Helmet } from "react-helmet-async";
 import { Panel, DefaultButton } from "@fluentui/react";
 import { SparkleFilled } from "@fluentui/react-icons";
@@ -39,20 +37,6 @@ import { TokenClaimsDisplay } from "../../components/TokenClaimsDisplay";
 import { LoginContext } from "../../loginContext";
 import { LanguagePicker } from "../../i18n/LanguagePicker";
 import { Settings } from "../../components/Settings/Settings";
-import GraphVisualization from "../../components/GraphVisualization/GraphVisualization";
-interface GraphNode {
-    id: string;
-    label: string;
-    title?: string;
-    group?: string;
-}
-
-interface GraphEdge {
-    id: string;
-    from: string;
-    to: string;
-    label?: string;
-}
 
 const Chat = () => {
     const [isConfigPanelOpen, setIsConfigPanelOpen] = useState(false);
@@ -296,197 +280,80 @@ const Chat = () => {
         }
     };
 
+// Enhanced handleGraphStreamResponse and adjusted output for GraphVisualization compatibility
+const handleGraphStreamResponse = async (question, stream) => {
+    if (!stream) throw new Error("No stream available");
 
-    const [graphData, setGraphData] = useState<{
-        nodes: DataSet<GraphNode>;
-        edges: DataSet<GraphEdge>;
-    }>({
-        nodes: new DataSet<GraphNode>([]),
-        edges: new DataSet<GraphEdge>([])
-    });
-    
-    const networkContainer = useRef<HTMLDivElement>(null);
-    const networkInstance = useRef<Network | null>(null);
-    
-    // Network initialization and cleanup
-    useEffect(() => {
-        if (networkContainer.current) {
-            networkInstance.current = new Network(
-                networkContainer.current,
-                {
-                    nodes: graphData.nodes,
-                    edges: graphData.edges
-                },
-                {
-                    nodes: {
-                        shape: "box",
-                        font: { size: 14 },
-                        margin: { top: 8, right: 8, bottom: 8, left: 8 },
-                        widthConstraint: { maximum: 200 },
-                    },
-                    edges: {
-                        arrows: "to",
-                        smooth: true,
-                    },
-                    physics: {
-                        stabilization: true,
-                        barnesHut: {
-                            gravitationalConstant: -2000,
-                            springLength: 150,
-                            springConstant: 0.04,
-                        },
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let result = "";
+    let nodes = [];
+    let edges = [];
+    const charDelay = 20;
+
+    // Regex to parse nodes and edges from relations
+    const relationRegex = /^\s*([\w\s\-]+)\s*->\s*([\w\s\-]+)\s*->\s*(.+)$/;
+
+    try {
+        setAnswers(prev => [...prev, [question, { message: { content: "", role: "assistant" }, context: { nodes: [], edges: [] } }]]);
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split("\n");
+
+            for (let line of lines) {
+                line = line.trim();
+
+                // Parse valid relations for graph visualization
+                const match = line.match(relationRegex);
+                if (match) {
+                    const [_, source, label, target] = match;
+                    if (!nodes.find(n => n.id === source)) {
+                        nodes.push({ id: source, label: source });
                     }
+                    if (!nodes.find(n => n.id === target)) {
+                        nodes.push({ id: target, label: target });
+                    }
+                    edges.push({ from: source, to: target, label });
+                    continue;
                 }
-            );
-        }
-    
-        return () => {
-            if (networkInstance.current) {
-                networkInstance.current.destroy();
-                networkInstance.current = null;
-            }
-        };
-    }, []);
-    
-    // Handle graph stream response
-    const handleGraphStreamResponse = async (question: string, stream: ReadableStream | null) => {
-        if (!stream) {
-            console.error("Streaming error: No stream available");
-            throw new Error("No stream available");
-        }
-    
-        const reader = stream.getReader();
-        const decoder = new TextDecoder();
-        let result = ""; // Stores the text response
-        const charDelay = 20;
-    
-        try {
-            setAnswers(prev => [
-                ...prev,
-                [question, {
-                    message: { content: "", role: "assistant" },
-                    session_state: null,
-                    delta: { content: "", role: "assistant" },
-                    context: {
-                        data_points: [],
-                        followup_questions: [],
-                        thoughts: [],
-                        graphData: { nodes: [], edges: [] } // New field to store graph data
-                    }
-                }]
-            ]);
-    
-            // **Extract existing node & edge IDs**
-            const existingNodeIds = new Set(graphData.nodes.getIds());
-            const existingEdgeKeys = new Set(graphData.edges.get().map(edge => `${edge.from}-${edge.to}`));
-    
-            let newGraphNodes: GraphNode[] = [];
-            let newGraphEdges: GraphEdge[] = [];
-    
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                if (!value) continue;
-    
-                const chunk = decoder.decode(value, { stream: true });
-                const lines = chunk.split("\n");
-    
-                for (let line of lines) {
-                    line = line.trim();
-    
-                    // **Extract and Store Node Data**
-                    if (line.startsWith("event: nodes")) {
-                        const dataLine = lines[lines.indexOf(line) + 1];
-                        if (dataLine?.startsWith("data: ")) {
-                            try {
-                                const nodeData = JSON.parse(dataLine.replace("data: ", ""));
-    
-                                nodeData.nodes.forEach((node: string) => {
-                                    const parts = node.split(" -> ");
-                                    if (parts.length === 3) {
-                                        const from = parts[0];
-                                        const relationship = parts[1];
-                                        const to = parts[2];
-    
-                                        if (!existingNodeIds.has(from)) {
-                                            newGraphNodes.push({ id: from, label: from });
-                                            existingNodeIds.add(from);
-                                        }
-                                        if (!existingNodeIds.has(to)) {
-                                            newGraphNodes.push({ id: to, label: to });
-                                            existingNodeIds.add(to);
-                                        }
-    
-                                        const edgeKey = `${from}-${to}`;
-                                        if (!existingEdgeKeys.has(edgeKey)) {
-                                            newGraphEdges.push({ from, to, label: relationship });
-                                            existingEdgeKeys.add(edgeKey);
-                                        }
-                                    }
-                                });
-    
-                            } catch (e) {
-                                console.error("Error parsing node data:", e);
-                            }
-                        }
-                        continue;
-                    }
-    
-                    // **Extract and Store Only the Text Response**
-                    if (line.startsWith("data: ")) {
-                        let wordChunk = line.replace("data: ", "");
-                        if (wordChunk.includes('{"nodes":')) {
-                            wordChunk = wordChunk.split('{"nodes":')[0].trim();
-                        }
-    
-                        for (const char of wordChunk) {
-                            result += char;
-    
-                            setAnswers(prev => {
-                                const lastEntry = prev[prev.length - 1];
-                                const updatedEntry: Answer = {
-                                    ...lastEntry[1],
-                                    message: { content: result, role: "assistant" },
-                                    delta: { content: char, role: "assistant" },
-                                    context: {
-                                        ...lastEntry[1].context,
-                                        graphData: { nodes: newGraphNodes, edges: newGraphEdges } // Attach graph data
-                                    }
-                                };
-                                return [...prev.slice(0, -1), [question, updatedEntry]];
-                            });
-    
-                            await new Promise(res => setTimeout(res, charDelay));
-                        }
-                    }
+
+                // Stream textual response
+                if (line.startsWith("data: ")) {
+                    const textChunk = line.replace("data: ", "");
+                    result += textChunk + ' ';
+                    setAnswers(prev => {
+                        const lastEntry = prev[prev.length - 1];
+                        return [...prev.slice(0, -1), [question, {
+                            ...lastEntry[1],
+                            message: { content: result.trim(), role: "assistant" }
+                        }]];
+                    });
                 }
             }
-    
-            // **Final Update: Only the Cleaned Text Answer**
-            const finalResult = result.trim();
-            setAnswers(prev => {
-                const lastEntry = prev[prev.length - 1];
-                const updatedEntry: Answer = {
-                    ...lastEntry[1],
-                    message: { content: finalResult, role: "assistant" },
-                    delta: { content: finalResult, role: "assistant" },
-                    context: {
-                        ...lastEntry[1].context,
-                        graphData: { nodes: newGraphNodes, edges: newGraphEdges }
-                    }
-                };
-                return [...prev.slice(0, -1), [question, updatedEntry]];
-            });
-        } catch (error) {
-            console.error("Streaming error:", error);
-            throw error;
-        } finally {
-            reader.releaseLock();
         }
-    };
+
+        // Pass parsed nodes and edges to GraphVisualization
+        setAnswers(prev => {
+            const lastEntry = prev[prev.length - 1];
+            return [...prev.slice(0, -1), [question, {
+                ...lastEntry[1],
+                message: { content: result.trim() || "Graph nodes generated." },
+                context: { ...lastEntry[1].context, nodes, edges }
+            }]];
+        });
+    } catch (error) {
+        console.error("Streaming error:", error);
+    } finally {
+        reader.releaseLock();
+    }
+};
+
+
     
-    
-    
+
     const clearChat = () => {
         lastQuestionRef.current = "";
         error && setError(undefined);
@@ -593,23 +460,10 @@ const Chat = () => {
 
     return (
         <div className={styles.container}>
+            {/* Setting the page title using react-helmet-async */}
             <Helmet>
                 <title>{t("pageTitle")}</title>
             </Helmet>
-            
-            {/* Graph Visualization Container - Placed at the top level */}
-            {/* <div 
-                ref={networkContainer}
-                style={{ 
-                    height: "300px",
-                    width: "100%",
-                    border: "1px solid #e0e0e0",
-                    borderRadius: "8px",
-                    margin: "20px 0",
-                    backgroundColor: "#f8f9fa"
-                }}
-            /> */}
-    
             <div className={styles.commandsSplitContainer}>
                 <div className={styles.commandsContainer}>
                     {((useLogin && showChatHistoryCosmos) || showChatHistoryBrowser) && (
@@ -622,7 +476,6 @@ const Chat = () => {
                     <SettingsButton className={styles.commandButton} onClick={() => setIsConfigPanelOpen(!isConfigPanelOpen)} />
                 </div>
             </div>
-            
             <div className={styles.chatRoot} style={{ marginLeft: isHistoryPanelOpen ? "300px" : "0" }}>
                 <div className={styles.chatContainer}>
                     {!lastQuestionRef.current ? (
@@ -631,6 +484,7 @@ const Chat = () => {
                             <h1 className={styles.chatEmptyStateTitle}>{t("chatEmptyStateTitle")}</h1>
                             <h2 className={styles.chatEmptyStateSubtitle}>{t("chatEmptyStateSubtitle")}</h2>
                             {showLanguagePicker && <LanguagePicker onLanguageChange={newLang => i18n.changeLanguage(newLang)} />}
+
                             <ExampleList onExampleClicked={onExampleClicked} useGPT4V={useGPT4V} />
                         </div>
                     ) : (
@@ -658,9 +512,8 @@ const Chat = () => {
                                         </div>
                                     </div>
                                 ))}
-                            
-                            
-                                {answers.map((answer, index) => (
+                            {!isStreaming &&
+                                answers.map((answer, index) => (
                                     <div key={index}>
                                         <UserChatMessage message={answer[0]} />
                                         <div className={styles.chatMessageGpt}>
@@ -679,18 +532,9 @@ const Chat = () => {
                                                 showSpeechOutputAzure={showSpeechOutputAzure}
                                                 showSpeechOutputBrowser={showSpeechOutputBrowser}
                                             />
-                                
-                                            {/* Render Graph Visualization Inline */}
-                                            {answer[1].context?.graphData?.nodes?.length > 0 && (
-                                                <div className={styles.graphContainer}>
-                                                    <GraphVisualization nodes={answer[1].context.graphData.nodes} edges={answer[1].context.graphData.edges} />
-                                                </div>
-                                            )}
                                         </div>
                                     </div>
                                 ))}
-                                
-    
                             {isLoading && (
                                 <>
                                     <UserChatMessage message={lastQuestionRef.current} />
@@ -699,12 +543,18 @@ const Chat = () => {
                                     </div>
                                 </>
                             )}
-    
-                            
+                            {error ? (
+                                <>
+                                    <UserChatMessage message={lastQuestionRef.current} />
+                                    <div className={styles.chatMessageGptMinWidth}>
+                                        <AnswerError error={error.toString()} onRetry={() => makeApiRequest(lastQuestionRef.current)} />
+                                    </div>
+                                </>
+                            ) : null}
                             <div ref={chatMessageStreamEnd} />
                         </div>
                     )}
-    
+
                     <div className={styles.chatInput}>
                         <QuestionInput
                             clearOnSend
@@ -715,7 +565,7 @@ const Chat = () => {
                         />
                     </div>
                 </div>
-    
+
                 {answers.length > 0 && activeAnalysisPanelTab && (
                     <AnalysisPanel
                         className={styles.chatAnalysisPanel}
@@ -726,7 +576,7 @@ const Chat = () => {
                         activeTab={activeAnalysisPanelTab}
                     />
                 )}
-    
+
                 {((useLogin && showChatHistoryCosmos) || showChatHistoryBrowser) && (
                     <HistoryPanel
                         provider={historyProvider}
@@ -740,7 +590,7 @@ const Chat = () => {
                         }}
                     />
                 )}
-    
+
                 <Panel
                     headerText={t("labels.headerText")}
                     isOpen={isConfigPanelOpen}
