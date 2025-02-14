@@ -280,22 +280,29 @@ const Chat = () => {
         }
     };
 
-// Enhanced handleGraphStreamResponse and adjusted output for GraphVisualization compatibility
+    // Improved handleGraphStreamResponse to handle nodes and display graph visualization
+// Fully corrected handleGraphStreamResponse to restore supporting content and graph visualization
+// Corrected handleGraphStreamResponse to fix SupportingContent parser issue
 const handleGraphStreamResponse = async (question, stream) => {
     if (!stream) throw new Error("No stream available");
 
     const reader = stream.getReader();
     const decoder = new TextDecoder();
     let result = "";
-    let nodes = [];
-    let edges = [];
+    const nodes = new Map();
+    const edges = [];
     const charDelay = 20;
 
-    // Regex to parse nodes and edges from relations
-    const relationRegex = /^\s*([\w\s\-]+)\s*->\s*([\w\s\-]+)\s*->\s*(.+)$/;
+    const relationRegex = /^\s*([^\->]+)\s*->\s*([^\->]+)\s*->\s*(.+)$/;
 
     try {
-        setAnswers(prev => [...prev, [question, { message: { content: "", role: "assistant" }, context: { nodes: [], edges: [] } }]]);
+        setAnswers(prev => [
+            ...prev,
+            [question, {
+                message: { content: "", role: "assistant" },
+                context: { data_points: [], nodes: [], edges: [] }
+            }]
+        ]);
 
         while (true) {
             const { done, value } = await reader.read();
@@ -306,42 +313,56 @@ const handleGraphStreamResponse = async (question, stream) => {
             for (let line of lines) {
                 line = line.trim();
 
-                // Parse valid relations for graph visualization
-                const match = line.match(relationRegex);
-                if (match) {
-                    const [_, source, label, target] = match;
-                    if (!nodes.find(n => n.id === source)) {
-                        nodes.push({ id: source, label: source });
+                // Handle nodes for graph visualization
+                if (line.includes('"nodes":')) {
+                    try {
+                        const jsonData = JSON.parse(line.replace(/^data:/, '').trim());
+                        if (Array.isArray(jsonData.nodes)) {
+                            jsonData.nodes.forEach(relation => {
+                                const match = relation.match(relationRegex);
+                                if (match) {
+                                    const [_, source, label, target] = match.map(s => s.trim());
+                                    if (!nodes.has(source)) nodes.set(source, { id: source, label: source });
+                                    if (!nodes.has(target)) nodes.set(target, { id: target, label: target });
+                                    edges.push({ from: source, to: target, label });
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        console.warn("Failed to parse node JSON:", e);
                     }
-                    if (!nodes.find(n => n.id === target)) {
-                        nodes.push({ id: target, label: target });
-                    }
-                    edges.push({ from: source, to: target, label });
                     continue;
                 }
 
-                // Stream textual response
+                // Collect and stream textual response with type check
                 if (line.startsWith("data: ")) {
                     const textChunk = line.replace("data: ", "");
-                    result += textChunk + ' ';
+                    if (typeof textChunk === 'string') {
+                        result += textChunk;
+                    }
                     setAnswers(prev => {
-                        const lastEntry = prev[prev.length - 1];
+                        const lastEntry = prev.at(-1) || [question, {}];
                         return [...prev.slice(0, -1), [question, {
                             ...lastEntry[1],
-                            message: { content: result.trim(), role: "assistant" }
+                            message: { content: result, role: "assistant" }
                         }]];
                     });
                 }
             }
         }
 
-        // Pass parsed nodes and edges to GraphVisualization
+        // Pass results to visualization and supporting content tabs with proper array checks
         setAnswers(prev => {
-            const lastEntry = prev[prev.length - 1];
+            const lastEntry = prev.at(-1) || [question, {}];
             return [...prev.slice(0, -1), [question, {
                 ...lastEntry[1],
-                message: { content: result.trim() || "Graph nodes generated." },
-                context: { ...lastEntry[1].context, nodes, edges }
+                message: { content: result.trim() || "Response completed." },
+                context: {
+                    ...lastEntry[1]?.context,
+                    data_points: Array.from(nodes.values()).map(node => `${node.id}: ${node.label}`),
+                    nodes: Array.from(nodes.values()),
+                    edges: edges.length ? edges : [{ from: 'No', to: 'Data', label: 'Available' }]
+                }
             }]];
         });
     } catch (error) {
@@ -352,7 +373,6 @@ const handleGraphStreamResponse = async (question, stream) => {
 };
 
 
-    
 
     const clearChat = () => {
         lastQuestionRef.current = "";

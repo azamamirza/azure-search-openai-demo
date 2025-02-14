@@ -38,9 +38,6 @@ export const AnalysisPanel = ({ answer, activeTab, activeCitation, citationHeigh
             <PivotItem itemKey={AnalysisPanelTabs.CitationTab} headerText={t("headerTexts.citation")} disabled={isDisabledCitationTab}>
                 {activeCitation && <MarkdownViewer src={activeCitation} />}
             </PivotItem>
-            <PivotItem itemKey={AnalysisPanelTabs.GraphVisualization} headerText={t("Graph")} disabled={isDisabledGraphTab}>
-                <GraphVisualization answer={answer} />
-            </PivotItem>
             <PivotItem itemKey={AnalysisPanelTabs.GraphVisualization} headerText={t("Graph")}>
                 <GraphVisualization
                     relations={answer.context.data_points || []}
