@@ -134,7 +134,7 @@ Then use the JSON view of the search explorer, and make sure you specify the sam
 
 ```json
 {
-  "search": "eye exams",
+  "search": "contract analysis",
   "queryType": "semantic",
   "semanticConfiguration": "default",
   "queryLanguage": "en-us",
@@ -147,7 +147,7 @@ You can also use the `highlight` parameter to see what text is being matched in 
 
 ```json
 {
-    "search": "eye exams",
+    "search": "con",
     "highlight": "content"
     ...
 }

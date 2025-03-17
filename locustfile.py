@@ -18,10 +18,10 @@ class ChatUser(HttpUser):
                     {
                         "content": random.choice(
                             [
-                                "What is included in my Northwind Health Plus plan that is not in standard?",
-                                "What does a Product Manager do?",
-                                "What happens in a performance review?",
-                                "Whats your whistleblower policy?",
+                                "What policies are available to review?",
+                                "Summarize the proposal for American Revelry?",
+                                "What endorsements are there?",
+                                "What is the TRIA coverage?",
                             ]
                         ),
                         "role": "user",
@@ -43,12 +43,12 @@ class ChatUser(HttpUser):
             "/chat",
             json={
                 "messages": [
-                    {"content": "What happens in a performance review?", "role": "user"},
+                    {"content": "Compare the policy for American Revelry to the original proposal.", "role": "user"},
                     {
-                        "content": "During a performance review, employees will receive feedback on their performance over the past year, including both successes and areas for improvement. The feedback will be provided by the employee's supervisor and is intended to help the employee develop and grow in their role [employee_handbook-3.pdf]. The review is a two-way dialogue between the employee and their manager, so employees are encouraged to be honest and open during the process [employee_handbook-3.pdf]. The employee will also have the opportunity to discuss their goals and objectives for the upcoming year [employee_handbook-3.pdf]. A written summary of the performance review will be provided to the employee, which will include a rating of their performance, feedback, and goals and objectives for the upcoming year [employee_handbook-3.pdf].",
+                        "content": "Compare policies to binders, proposals and certificates to ensure compatibility in coverage and terms. In other words, do the policies match what we proposed?",
                         "role": "assistant",
                     },
-                    {"content": "Does my plan cover eye exams?", "role": "user"},
+                    {"content": "What are the policy parameters?", "role": "user"},
                 ],
                 "context": {
                     "overrides": {
@@ -75,7 +75,7 @@ class ChatVisionUser(HttpUser):
             json={
                 "messages": [
                     {
-                        "content": "Can you identify any correlation between oil prices and stock market trends?",
+                        "content": "Compare the policy for American Revelry to the original proposal.",
                         "role": "user",
                     }
                 ],
@@ -104,7 +104,7 @@ class ChatVisionUser(HttpUser):
             "/chat/stream",
             json={
                 "messages": [
-                    {"content": "Compare the impact of interest rates and GDP in financial markets.", "role": "user"}
+                    {"content": "Extract policy data including Named Insured(s), SIC code, FEIN if available, address of covered locations.", "role": "user"}
                 ],
                 "context": {
                     "overrides": {
