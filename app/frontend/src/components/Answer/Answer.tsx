@@ -12,7 +12,7 @@ import { parseAnswerToHtml } from "./AnswerParser";
 import { AnswerIcon } from "./AnswerIcon";
 import { SpeechOutputBrowser } from "./SpeechOutputBrowser";
 import { SpeechOutputAzure } from "./SpeechOutputAzure";
-import ExportToExcelButton from "../Excel/ExportToExcelButton";
+
 
 interface Props {
     answer: ChatAppResponse;
@@ -27,6 +27,7 @@ interface Props {
     showFollowupQuestions?: boolean;
     showSpeechOutputBrowser?: boolean;
     showSpeechOutputAzure?: boolean;
+    
 }
 
 export const Answer = ({
@@ -41,14 +42,15 @@ export const Answer = ({
     onFollowupQuestionClicked,
     showFollowupQuestions,
     showSpeechOutputAzure,
-    showSpeechOutputBrowser
+    showSpeechOutputBrowser,
+    
 }: Props) => {
     const followupQuestions = answer.context?.followup_questions;
     const parsedAnswer = useMemo(() => parseAnswerToHtml(answer, isStreaming, onCitationClicked), [answer]);
     const { t } = useTranslation();
     const sanitizedAnswerHtml = DOMPurify.sanitize(parsedAnswer.answerHtml);
     const [copied, setCopied] = useState(false);
-    const [selectedPolicyId, setSelectedPolicyId] = useState<string>("");
+    
     
 
     const handleCopy = () => {
@@ -120,9 +122,7 @@ export const Answer = ({
                             );
                         })}
                     </Stack>
-                    <div style={{ marginTop: "10px" }}>
-                    <ExportToExcelButton policyId={selectedPolicyId}  />
-                    </div>
+                    
                 </Stack.Item>
             )}
 

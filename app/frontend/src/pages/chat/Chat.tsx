@@ -37,7 +37,7 @@ import { TokenClaimsDisplay } from "../../components/TokenClaimsDisplay";
 import { LoginContext } from "../../loginContext";
 import { LanguagePicker } from "../../i18n/LanguagePicker";
 import { Settings } from "../../components/Settings/Settings";
-
+import ExportToExcelButton from "../../components/Excel/ExportToExcelButton";
 
 const Chat = () => {
     const [isConfigPanelOpen, setIsConfigPanelOpen] = useState(false);
@@ -89,7 +89,7 @@ const Chat = () => {
     const audio = useRef(new Audio()).current;
     const [isPlaying, setIsPlaying] = useState(false);
 
-   
+    const [selectedPolicyId, setSelectedPolicyId] = useState<string>("");
 
     const speechConfig: SpeechConfig = {
         speechUrls,
@@ -171,16 +171,9 @@ const Chat = () => {
     })();
     const historyManager = useHistoryManager(historyProvider);
 
-    const [policyNumber, setPolicyNumber] = useState<string | null>(null);
-    const extractPolicyNumber = (message: string) => {
-        const match = message.match(/policy\s*#?\s*([A-Za-z0-9\-]+)/i);
-        if (match) {
-          setPolicyNumber(match[1]);
-        }
-      };
     const makeApiRequest = async (question: string) => {
         lastQuestionRef.current = question;
-        extractPolicyNumber(question);
+
         error && setError(undefined);
         setIsLoading(true);
         setActiveCitation(undefined);
@@ -612,8 +605,9 @@ const Chat = () => {
                             showSpeechInput={true}
                         />
                     </div>
-                   
-                    
+                    <div style={{ marginTop: 12 }}>
+                        <ExportToExcelButton policyId={"example-policy-id"} />
+                    </div>
                 </div>
 
                 {answers.length > 0 && activeAnalysisPanelTab && (
