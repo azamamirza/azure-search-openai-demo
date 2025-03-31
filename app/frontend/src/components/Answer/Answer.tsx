@@ -12,6 +12,7 @@ import { parseAnswerToHtml } from "./AnswerParser";
 import { AnswerIcon } from "./AnswerIcon";
 import { SpeechOutputBrowser } from "./SpeechOutputBrowser";
 import { SpeechOutputAzure } from "./SpeechOutputAzure";
+import ExportToExcelButton from "../Excel/ExportToExcelButton";
 
 interface Props {
     answer: ChatAppResponse;
@@ -47,6 +48,8 @@ export const Answer = ({
     const { t } = useTranslation();
     const sanitizedAnswerHtml = DOMPurify.sanitize(parsedAnswer.answerHtml);
     const [copied, setCopied] = useState(false);
+    const [selectedPolicyId, setSelectedPolicyId] = useState<string>("");
+    
 
     const handleCopy = () => {
         // Single replace to remove all HTML tags to remove the citations
@@ -117,6 +120,9 @@ export const Answer = ({
                             );
                         })}
                     </Stack>
+                    <div style={{ marginTop: "10px" }}>
+                    <ExportToExcelButton policyId={selectedPolicyId}  />
+                    </div>
                 </Stack.Item>
             )}
 

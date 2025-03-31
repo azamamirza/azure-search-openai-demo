@@ -37,6 +37,7 @@ import { TokenClaimsDisplay } from "../../components/TokenClaimsDisplay";
 import { LoginContext } from "../../loginContext";
 import { LanguagePicker } from "../../i18n/LanguagePicker";
 import { Settings } from "../../components/Settings/Settings";
+import ExportToExcelButton from "../../components/Excel/ExportToExcelButton";
 
 const Chat = () => {
     const [isConfigPanelOpen, setIsConfigPanelOpen] = useState(false);
@@ -87,6 +88,8 @@ const Chat = () => {
     const [showChatHistoryCosmos, setShowChatHistoryCosmos] = useState<boolean>(false);
     const audio = useRef(new Audio()).current;
     const [isPlaying, setIsPlaying] = useState(false);
+
+   
 
     const speechConfig: SpeechConfig = {
         speechUrls,
@@ -168,9 +171,16 @@ const Chat = () => {
     })();
     const historyManager = useHistoryManager(historyProvider);
 
+    const [policyNumber, setPolicyNumber] = useState<string | null>(null);
+    const extractPolicyNumber = (message: string) => {
+        const match = message.match(/policy\s*#?\s*([A-Za-z0-9\-]+)/i);
+        if (match) {
+          setPolicyNumber(match[1]);
+        }
+      };
     const makeApiRequest = async (question: string) => {
         lastQuestionRef.current = question;
-
+        extractPolicyNumber(question);
         error && setError(undefined);
         setIsLoading(true);
         setActiveCitation(undefined);
@@ -280,116 +290,116 @@ const Chat = () => {
         }
     };
 
-   // Fully corrected handleGraphStreamResponse to fix GraphVisualization rendering
-   const handleGraphStreamResponse = async (question, stream) => {
-    if (!stream) throw new Error("No stream available");
+    // Fully corrected handleGraphStreamResponse to fix GraphVisualization rendering
+    const handleGraphStreamResponse = async (question, stream) => {
+        if (!stream) throw new Error("No stream available");
 
-    const reader = stream.getReader();
-    const decoder = new TextDecoder();
-    let textResult = "";
-    const charDelay = 20;
+        const reader = stream.getReader();
+        const decoder = new TextDecoder();
+        let textResult = "";
+        const charDelay = 20;
 
-    try {
-        // Initialize answer with proper structure
-        setAnswers(prev => [
-            ...prev,
-            [question, {
-                message: { content: "", role: "assistant" },
-                context: { 
-                    data_points: [],  // This should hold relationship strings
-                    followup_questions: [],
-                    thoughts: [] 
-                }
-            }]
-        ]);
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split("\n");
-
-            for (let line of lines) {
-                line = line.trim();
-
-                // Handle graph data with nodes
-                if (line.startsWith("data: {")) {
-                    try {
-                        const jsonData = JSON.parse(line.replace("data: ", ""));
-                        if (jsonData?.nodes) {
-                            const newRelations = jsonData.nodes
-                                .filter(relation => typeof relation === 'string')
-                                .map(relation => relation.replace(/\s+/g, ' ').trim());
-
-                            if (newRelations.length > 0) {
-                                setAnswers(prev => {
-                                    const lastEntry = prev[prev.length - 1];
-                                    const existing = lastEntry[1].context.data_points;
-                                    const uniqueRelations = [...new Set([...existing, ...newRelations])];
-                                    
-                                    return prev.map((entry, idx) => 
-                                        idx === prev.length - 1 
-                                            ? [question, {
-                                                ...entry[1],
-                                                context: {
-                                                    ...entry[1].context,
-                                                    data_points: uniqueRelations
-                                                }
-                                            }]
-                                            : entry
-                                    );
-                                });
-                            }
-                        }
-                    } catch (e) {
-                        console.warn("Graph data parse error:", e);
+        try {
+            // Initialize answer with proper structure
+            setAnswers(prev => [
+                ...prev,
+                [question, {
+                    message: { content: "", role: "assistant" },
+                    context: {
+                        data_points: [],  // This should hold relationship strings
+                        followup_questions: [],
+                        thoughts: []
                     }
-                }
-                // Handle text content
-                else if (line.startsWith("data: ")) {
-                    const textChunk = line.replace("data: ", "");
-                    for (const char of textChunk) {
-                        textResult += char;
-                        setAnswers(prev => {
-                            const lastEntry = prev[prev.length - 1];
-                            return prev.map((entry, idx) => 
-                                idx === prev.length - 1 
-                                    ? [question, {
-                                        ...entry[1],
-                                        message: { 
-                                            content: textResult, 
-                                            role: "assistant" 
-                                        }
-                                    }]
-                                    : entry
-                            );
-                        });
-                        await new Promise(res => setTimeout(res, charDelay));
+                }]
+            ]);
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split("\n");
+
+                for (let line of lines) {
+                    line = line.trim();
+
+                    // Handle graph data with nodes
+                    if (line.startsWith("data: {")) {
+                        try {
+                            const jsonData = JSON.parse(line.replace("data: ", ""));
+                            if (jsonData?.nodes) {
+                                const newRelations = jsonData.nodes
+                                    .filter(relation => typeof relation === 'string')
+                                    .map(relation => relation.replace(/\s+/g, ' ').trim());
+
+                                if (newRelations.length > 0) {
+                                    setAnswers(prev => {
+                                        const lastEntry = prev[prev.length - 1];
+                                        const existing = lastEntry[1].context.data_points;
+                                        const uniqueRelations = [...new Set([...existing, ...newRelations])];
+
+                                        return prev.map((entry, idx) =>
+                                            idx === prev.length - 1
+                                                ? [question, {
+                                                    ...entry[1],
+                                                    context: {
+                                                        ...entry[1].context,
+                                                        data_points: uniqueRelations
+                                                    }
+                                                }]
+                                                : entry
+                                        );
+                                    });
+                                }
+                            }
+                        } catch (e) {
+                            console.warn("Graph data parse error:", e);
+                        }
+                    }
+                    // Handle text content
+                    else if (line.startsWith("data: ")) {
+                        const textChunk = line.replace("data: ", "");
+                        for (const char of textChunk) {
+                            textResult += char;
+                            setAnswers(prev => {
+                                const lastEntry = prev[prev.length - 1];
+                                return prev.map((entry, idx) =>
+                                    idx === prev.length - 1
+                                        ? [question, {
+                                            ...entry[1],
+                                            message: {
+                                                content: textResult,
+                                                role: "assistant"
+                                            }
+                                        }]
+                                        : entry
+                                );
+                            });
+                            await new Promise(res => setTimeout(res, charDelay));
+                        }
                     }
                 }
             }
+
+            // Final cleanup
+            setAnswers(prev => prev.map((entry, idx) =>
+                idx === prev.length - 1
+                    ? [question, {
+                        ...entry[1],
+                        message: {
+                            content: textResult.trim(),
+                            role: "assistant"
+                        }
+                    }]
+                    : entry
+            ));
+
+        } catch (error) {
+            console.error("Streaming error:", error);
+        } finally {
+            reader.releaseLock();
         }
-
-        // Final cleanup
-        setAnswers(prev => prev.map((entry, idx) => 
-            idx === prev.length - 1 
-                ? [question, {
-                    ...entry[1],
-                    message: { 
-                        content: textResult.trim(), 
-                        role: "assistant" 
-                    }
-                }]
-                : entry
-        ));
-
-    } catch (error) {
-        console.error("Streaming error:", error);
-    } finally {
-        reader.releaseLock();
-    }
-};
+    };
 
     const clearChat = () => {
         lastQuestionRef.current = "";
@@ -511,6 +521,7 @@ const Chat = () => {
                     <ClearChatButton className={styles.commandButton} onClick={clearChat} disabled={!lastQuestionRef.current || isLoading} />
                     {showUserUpload && <UploadFile className={styles.commandButton} disabled={!loggedIn} />}
                     <SettingsButton className={styles.commandButton} onClick={() => setIsConfigPanelOpen(!isConfigPanelOpen)} />
+
                 </div>
             </div>
             <div className={styles.chatRoot} style={{ marginLeft: isHistoryPanelOpen ? "300px" : "0" }}>
@@ -601,6 +612,10 @@ const Chat = () => {
                             showSpeechInput={true}
                         />
                     </div>
+                    <div style={{ marginTop: "10px" }}>
+                    <ExportToExcelButton policyId={policyNumber || ""}  />
+                    </div>
+                    
                 </div>
 
                 {answers.length > 0 && activeAnalysisPanelTab && (
