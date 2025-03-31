@@ -37,7 +37,7 @@ import { TokenClaimsDisplay } from "../../components/TokenClaimsDisplay";
 import { LoginContext } from "../../loginContext";
 import { LanguagePicker } from "../../i18n/LanguagePicker";
 import { Settings } from "../../components/Settings/Settings";
-import ExportToExcelButton from "../../components/Excel/ExportToExcelButton";
+
 
 const Chat = () => {
     const [isConfigPanelOpen, setIsConfigPanelOpen] = useState(false);
@@ -612,9 +612,7 @@ const Chat = () => {
                             showSpeechInput={true}
                         />
                     </div>
-                    <div style={{ marginTop: "10px" }}>
-                    <ExportToExcelButton policyId={policyNumber || ""}  />
-                    </div>
+                   
                     
                 </div>
 
