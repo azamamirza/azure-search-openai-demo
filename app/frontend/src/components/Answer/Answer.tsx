@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Stack, IconButton } from "@fluentui/react";
 import { useTranslation } from "react-i18next";
 import DOMPurify from "dompurify";
@@ -12,7 +12,7 @@ import { parseAnswerToHtml } from "./AnswerParser";
 import { AnswerIcon } from "./AnswerIcon";
 import { SpeechOutputBrowser } from "./SpeechOutputBrowser";
 import { SpeechOutputAzure } from "./SpeechOutputAzure";
-
+import ExportToExcelButton from "../../components/Excel/ExportToExcelButton";
 
 interface Props {
     answer: ChatAppResponse;
@@ -27,7 +27,6 @@ interface Props {
     showFollowupQuestions?: boolean;
     showSpeechOutputBrowser?: boolean;
     showSpeechOutputAzure?: boolean;
-    
 }
 
 export const Answer = ({
@@ -43,15 +42,78 @@ export const Answer = ({
     showFollowupQuestions,
     showSpeechOutputAzure,
     showSpeechOutputBrowser,
-    
 }: Props) => {
     const followupQuestions = answer.context?.followup_questions;
     const parsedAnswer = useMemo(() => parseAnswerToHtml(answer, isStreaming, onCitationClicked), [answer]);
     const { t } = useTranslation();
     const sanitizedAnswerHtml = DOMPurify.sanitize(parsedAnswer.answerHtml);
     const [copied, setCopied] = useState(false);
-    
-    
+    const [policyId, setPolicyId] = useState<string>("");
+    const [showExportButton, setShowExportButton] = useState(false);
+
+    // Extract policy ID from the answer or data points
+    useEffect(() => {
+        // Method 1: Try to find policy ID in the answer text
+        const extractPolicyIdFromText = () => {
+            // Common patterns for policy IDs in text
+            const patterns = [
+                /policy\s+id[:\s]+([A-Za-z0-9-_]+)/i,
+                /policy[:\s#]+([A-Za-z0-9-_]+)/i,
+                /policy\s+number[:\s]+([A-Za-z0-9-_]+)/i,
+                /id[:\s]+([A-Za-z0-9-_]+)/i,
+            ];
+
+            // Try each pattern
+            for (const pattern of patterns) {
+                const match = sanitizedAnswerHtml.match(pattern);
+                if (match && match[1]) {
+                    return match[1].trim();
+                }
+            }
+            return "";
+        };
+
+        // Method 2: Look for policy ID in data points/context
+        const extractPolicyIdFromContext = () => {
+            const dataPoints = answer.context?.data_points;
+            if (dataPoints && Array.isArray(dataPoints)) {
+                for (const dataPoint of dataPoints) {
+                    if (typeof dataPoint === 'string') {
+                        // Check if the data point contains policy ID information
+                        const policyIdMatch = dataPoint.match(/policy\s+id[:\s]+([A-Za-z0-9-_]+)/i) || 
+                                             dataPoint.match(/policy[:\s#]+([A-Za-z0-9-_]+)/i) ||
+                                             dataPoint.match(/policy\s+number[:\s]+([A-Za-z0-9-_]+)/i);
+                        
+                        if (policyIdMatch && policyIdMatch[1]) {
+                            return policyIdMatch[1].trim();
+                        }
+                    }
+                }
+            }
+            return "";
+        };
+
+        // Try both methods
+        const idFromText = extractPolicyIdFromText();
+        const idFromContext = extractPolicyIdFromContext();
+        
+        const foundPolicyId = idFromText || idFromContext;
+        
+        if (foundPolicyId) {
+            setPolicyId(foundPolicyId);
+            setShowExportButton(true);
+        } else {
+            // If no policy ID found, check if answer is about a policy at all
+            const isPolicyRelated = 
+                sanitizedAnswerHtml.match(/policy|insurance|coverage|premium|insured/i) ||
+                (answer.context?.data_points && Array.isArray(answer.context.data_points) && 
+                  answer.context.data_points.some(dp => 
+                    typeof dp === 'string' && dp.match(/policy|insurance|coverage|premium|insured/i)
+                ));
+                
+            setShowExportButton(!!isPolicyRelated);
+        }
+    }, [answer, sanitizedAnswerHtml]);
 
     const handleCopy = () => {
         // Single replace to remove all HTML tags to remove the citations
@@ -122,7 +184,18 @@ export const Answer = ({
                             );
                         })}
                     </Stack>
-                    
+                </Stack.Item>
+            )}
+
+            {/* Export to Excel section - always show if policy-related */}
+            {showExportButton && (
+                <Stack.Item>
+                    <div style={{ marginTop: 12, display: "flex", justifyContent: "center", alignItems: "center" }}>
+                        <ExportToExcelButton 
+                            policyId={policyId} 
+                            fileName={`Policy_${policyId || 'Data'}_${new Date().toISOString().split('T')[0]}.xlsx`}
+                        />
+                    </div>
                 </Stack.Item>
             )}
 

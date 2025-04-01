@@ -89,7 +89,7 @@ const Chat = () => {
     const audio = useRef(new Audio()).current;
     const [isPlaying, setIsPlaying] = useState(false);
 
-    const [selectedPolicyId, setSelectedPolicyId] = useState<string>("");
+    
 
     const speechConfig: SpeechConfig = {
         speechUrls,
@@ -605,9 +605,7 @@ const Chat = () => {
                             showSpeechInput={true}
                         />
                     </div>
-                    <div style={{ marginTop: 12 }}>
-                        <ExportToExcelButton policyId={"example-policy-id"} />
-                    </div>
+                   
                 </div>
 
                 {answers.length > 0 && activeAnalysisPanelTab && (
