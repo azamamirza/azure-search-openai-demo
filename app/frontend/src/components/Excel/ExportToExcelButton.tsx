@@ -17,14 +17,13 @@ import {
   Text,
   PrimaryButton,
   DefaultButton,
-  Dialog,
-  DialogType,
-  DialogFooter,
-  Label,
-  IconButton,
-  SearchBox
+  SearchBox,
+  Toggle
 } from '@fluentui/react';
 import { ChatAppRequest, ResponseMessage } from '../../api/models';
+
+// ================ ORIGINAL CODE BEGINS ================
+// Keep all original interfaces and functions exactly as they were
 
 interface PolicyHeaderInfo {
   insuredName: string;
@@ -49,29 +48,21 @@ interface PolicyData {
   };
 }
 
-// For progressive display in the UI
-interface DisplayRow {
-  key: string;
-  section: string;
-  field: string;
-  value: string;
-  page: string;
-  isNew?: boolean; // To highlight newly added rows
-}
-
 // Cache for policy data to avoid repeated queries
 const policyDataCache: Record<string, PolicyData> = {};
 
-// Debug log function
-const debug = (message: string, data?: any) => {
+// Debug logger
+const debugLog = (message: string, data?: any) => {
   if (process.env.NODE_ENV !== 'production') {
-    console.log(`[ExportButton] ${message}`, data || '');
+    console.log(`[ExportButton] ${message}`, data !== undefined ? data : '');
   }
 };
 
 // Single query function - more reliable than batching
 const queryRAG = async (prompt: string, policyId: string): Promise<string> => {
   try {
+    debugLog(`Sending query: "${prompt.substring(0, 50)}..."`);
+    
     const messages: ResponseMessage[] = [
       {
         content: `For policy ID ${policyId}: ${prompt}`,
@@ -105,6 +96,10 @@ const queryRAG = async (prompt: string, policyId: string): Promise<string> => {
 
     const data = await response.json();
     const result = data.message?.content?.trim() ?? '';
+    
+    // Log result for debugging
+    debugLog(`Query result: "${result.substring(0, 50)}..."`);
+    
     return result || 'NF';
   } catch (err) {
     console.error('Query RAG error:', err);
@@ -112,41 +107,44 @@ const queryRAG = async (prompt: string, policyId: string): Promise<string> => {
   }
 };
 
-// Add retry logic for more reliability
-const queryRAGWithRetry = async (prompt: string, policyId: string, maxRetries = 2): Promise<string> => {
+// Retry logic for critical queries
+const queryWithRetry = async (prompt: string, policyId: string, maxRetries = 2): Promise<string> => {
+  let result = 'NF';
   let attempts = 0;
-  let lastError = null;
   
-  while (attempts <= maxRetries) {
-    try {
-      const result = await queryRAG(prompt, policyId);
-      if (result && result !== 'NF') {
-        if (attempts > 0) {
-          debug(`Query succeeded after ${attempts} retries: "${prompt.substring(0, 50)}..."`);
-        }
-        return result;
-      }
-      
-      // If we got 'NF', wait and retry
-      attempts++;
-      debug(`Query returned NF, retrying (${attempts}/${maxRetries}): "${prompt.substring(0, 50)}..."`);
-      await new Promise(r => setTimeout(r, 800)); // Wait before retry
-    } catch (err) {
-      lastError = err;
-      attempts++;
-      debug(`Query failed, retrying (${attempts}/${maxRetries}): "${prompt.substring(0, 50)}..."`);
-      await new Promise(r => setTimeout(r, 1000)); // Wait longer after error
+  while (attempts <= maxRetries && (result === 'NF' || !result)) {
+    if (attempts > 0) {
+      debugLog(`Retrying query attempt ${attempts}/${maxRetries}`);
+      // Wait a bit between retries
+      await new Promise(r => setTimeout(r, 1000));
     }
+    
+    result = await queryRAG(prompt, policyId);
+    attempts++;
+    
+    if (result && result !== 'NF') break;
   }
   
-  debug(`Query failed after ${maxRetries} retries: "${prompt.substring(0, 50)}..."`);
-  return 'NF';
+  return result;
 };
+
+// ================ NEW CODE FOR UI INTEGRATION ================
+// Interface for UI display rows
+interface DisplayRow {
+  key: string;
+  section: string;
+  field: string;
+  value: string;
+  page: string;
+  isNew?: boolean; // To highlight newly added rows
+  rawResponse?: string; // For debugging - show the original response
+}
 
 // Convert policy data to display rows for UI
 const convertToDisplayRows = (
   data: Partial<PolicyData>, 
-  existingRows: DisplayRow[] = []
+  existingRows: DisplayRow[] = [],
+  showAllResponses = false // Add flag to show all responses
 ): DisplayRow[] => {
   const rows: DisplayRow[] = [...existingRows];
   const existingKeys = new Set(existingRows.map(row => row.key));
@@ -165,10 +163,11 @@ const convertToDisplayRows = (
     
     for (const { field, label } of headerFields) {
       const value = data.headerInfo[field as keyof PolicyHeaderInfo];
-      if (value && 
+      // If showing all responses, include even empty values
+      if (showAllResponses || (value && 
           value !== 'NF' && 
           value !== 'I don\'t know.' &&
-          value !== 'I don\'t know') {
+          value !== 'I don\'t know')) {
         
         const key = `Header_${field}`;
         if (!existingKeys.has(key)) {
@@ -176,9 +175,10 @@ const convertToDisplayRows = (
             key,
             section: 'Header',
             field: label,
-            value,
+            value: value || 'NF', // Show NF instead of empty string
             page: '',
-            isNew: true
+            isNew: true,
+            rawResponse: value
           });
           existingKeys.add(key);
         }
@@ -190,11 +190,12 @@ const convertToDisplayRows = (
   if (data.sections) {
     for (const [section, fields] of Object.entries(data.sections)) {
       for (const field of fields) {
-        if (field.value && 
+        // If showing all responses, include even empty values
+        if (showAllResponses || (field.value && 
             field.value !== 'NF' && 
             field.value !== 'I don\'t know.' &&
             field.value !== 'I don\'t know' &&
-            field.fieldName) {
+            field.fieldName)) {
           
           const key = `${section}_${field.fieldName}`;
           if (!existingKeys.has(key)) {
@@ -202,9 +203,10 @@ const convertToDisplayRows = (
               key,
               section,
               field: field.fieldName,
-              value: field.value,
+              value: field.value || 'NF', // Show NF instead of empty string
               page: field.page,
-              isNew: true
+              isNew: true,
+              rawResponse: field.value
             });
             existingKeys.add(key);
           }
@@ -216,21 +218,22 @@ const convertToDisplayRows = (
   return rows;
 };
 
-// Progressive policy data extraction using the original query pattern that worked well
-const extractPolicyDataProgressively = async (
+// Modified Original Function with Callbacks but Same Core Logic
+const extractPolicyData = async (
   policyId: string,
   setProgress?: (progress: number) => void,
-  onPartialResults?: (data: Partial<PolicyData>, displayRows: DisplayRow[]) => void
+  onPartialResults?: (data: Partial<PolicyData>, displayRows: DisplayRow[], showAllResponses?: boolean) => void,
+  showAllResponses = false
 ): Promise<PolicyData> => {
-  debug(`Starting extraction for policy ID: ${policyId}`);
+  debugLog(`Starting extraction for policy ID: ${policyId}`);
   
   // Check cache first
   if (policyDataCache[policyId]) {
-    debug(`Using cached data for policy ID: ${policyId}`);
+    debugLog(`Using cached data for policy ID: ${policyId}`);
     if (setProgress) setProgress(100);
     if (onPartialResults) {
-      const displayRows = convertToDisplayRows(policyDataCache[policyId]);
-      onPartialResults(policyDataCache[policyId], displayRows);
+      const displayRows = convertToDisplayRows(policyDataCache[policyId], [], showAllResponses);
+      onPartialResults(policyDataCache[policyId], displayRows, showAllResponses);
     }
     return policyDataCache[policyId];
   }
@@ -248,27 +251,31 @@ const extractPolicyDataProgressively = async (
     sections: {}
   };
   
-  // Track partial results for the UI
+  // For tracking partial data for UI updates - initialize with undefined
   const partialData: Partial<PolicyData> = {
-    headerInfo: { ...policyData.headerInfo },
+    headerInfo: {
+      insuredName: '',
+      clientCode: '',
+      policyNumber: '',
+      policyDates: '',
+      policyType: '',
+      policyPremium: '',
+      expiringPolicyPremium: ''
+    }, // Start with empty object to only show fields we've processed
     sections: {}
   };
   
-  // Track display rows
+  // For tracking display rows
   let currentDisplayRows: DisplayRow[] = [];
   
-  // Track stats
+  // Stats
   let totalQueries = 0;
   let successfulQueries = 0;
 
   try {
     if (setProgress) setProgress(5);
     
-    // HEADER FIELDS - Using original query approach that was working well
-    // IMPORTANT: We're maintaining sequential queries as in the original implementation
-    // but providing progressive UI updates after each one
-    
-    debug("Processing header fields sequentially");
+    // OPTIMIZATION: Get header fields with specific, direct queries
     const headerPrompts = [
       ['insuredName', 'Extract ONLY the Insured Name from the policy. Return ONLY the value, no other text.'],
       ['clientCode', 'Extract ONLY the Client Code from the policy. Return ONLY the value, no other text.'],
@@ -279,117 +286,123 @@ const extractPolicyDataProgressively = async (
       ['expiringPolicyPremium', 'Extract ONLY the Expiring Policy Premium from the policy. Include $ and commas. Return ONLY the amount, no other text.']
     ] as const;
     
-    // Process header fields one by one to ensure accuracy - USING ORIGINAL APPROACH
+    // Process header fields one by one to ensure accuracy
     for (let i = 0; i < headerPrompts.length; i++) {
       const [field, prompt] = headerPrompts[i];
       totalQueries++;
       
-      debug(`Querying header field: ${field}`);
-      const result = await queryRAGWithRetry(prompt, policyId);
+      debugLog(`Processing header field: ${field}`);
+      const result = await queryRAG(prompt, policyId);
+      
+      policyData.headerInfo[field] = result.trim();
+      partialData.headerInfo![field] = result.trim(); // Add to partial data for UI
       
       if (result && result !== 'NF') {
         successfulQueries++;
-        policyData.headerInfo[field] = result.trim();
-        partialData.headerInfo![field] = result.trim();
-        
-        // Update UI with this header field
-        if (onPartialResults) {
-          currentDisplayRows = convertToDisplayRows(
-            { headerInfo: { [field]: result.trim() } as any },
-            currentDisplayRows
-          );
-          onPartialResults({ ...partialData }, [...currentDisplayRows]);
-        }
       }
       
-      // Update progress for header fields (5-30%)
+      // UI Update after each header field - NEW
+      if (onPartialResults) {
+        currentDisplayRows = convertToDisplayRows(
+          { headerInfo: { [field]: result.trim() } as any },
+          currentDisplayRows,
+          showAllResponses
+        );
+        onPartialResults({...partialData}, [...currentDisplayRows], showAllResponses);
+      }
+      
+      // Update progress for header fields (0-30%)
       if (setProgress) {
         const headerProgress = 5 + Math.floor((i + 1) / headerPrompts.length * 25);
         setProgress(headerProgress);
       }
-      
-      // Small delay between queries to avoid rate limiting
-      await new Promise(r => setTimeout(r, 250));
     }
     
-    debug("Completed header fields extraction");
-    if (setProgress) setProgress(30);
+    debugLog(`Completed header extraction. Success rate: ${successfulQueries}/${totalQueries}`);
     
-    // Get all sections in the policy - USING ORIGINAL APPROACH
-    debug("Querying for policy sections");
+    // Get all sections in the policy - USE RETRY FOR THIS CRITICAL QUERY
+    debugLog("Requesting sections list");
     const sectionsPrompt = 'List all coverage sections in this policy. Respond ONLY with comma-separated section names, nothing else.';
     totalQueries++;
-    const sectionsResponse = await queryRAGWithRetry(sectionsPrompt, policyId);
+    
+    // Use retry for this critical query
+    const sectionsResponse = await queryWithRetry(sectionsPrompt, policyId);
+    debugLog(`Sections response: "${sectionsResponse}"`);
+    
     const sections = sectionsResponse.split(',').map(s => s.trim()).filter(s => s && s !== 'NF');
     
     if (sections.length > 0) {
       successfulQueries++;
-      debug(`Found ${sections.length} sections: ${sections.join(', ')}`);
+      debugLog(`Found ${sections.length} sections: ${JSON.stringify(sections)}`);
     } else {
-      debug("No sections found or section query failed");
+      debugLog("WARNING: No sections found in the policy");
     }
     
     if (setProgress) setProgress(35);
     
-    // Process each section sequentially - USING ORIGINAL APPROACH
+    // Process each section
     for (let i = 0; i < sections.length; i++) {
       const section = sections[i];
-      debug(`Processing section ${i+1}/${sections.length}: ${section}`);
+      debugLog(`Processing section ${i+1}/${sections.length}: ${section}`);
       
-      // First get fields for this section
+      // First get fields for this section - USE RETRY FOR THIS CRITICAL QUERY
       const fieldsPrompt = `List only the field names in the ${section} section. Format as comma-separated values with NO additional text.`;
       totalQueries++;
-      const fieldsResponse = await queryRAGWithRetry(fieldsPrompt, policyId);
+      
+      // Use retry for this critical query
+      const fieldsResponse = await queryWithRetry(fieldsPrompt, policyId);
+      debugLog(`Fields for ${section}: "${fieldsResponse}"`);
+      
       const fields = fieldsResponse.split(',').map(f => f.trim()).filter(f => f && f !== 'NF');
       
       if (fields.length > 0) {
         successfulQueries++;
-        debug(`Found ${fields.length} fields in section ${section}`);
+        debugLog(`Found ${fields.length} fields in section ${section}: ${JSON.stringify(fields)}`);
       } else {
-        debug(`No fields found in section ${section} or query failed`);
+        debugLog(`WARNING: No fields found in section ${section}`);
       }
       
       policyData.sections[section] = [];
-      partialData.sections![section] = [];
       
-      // Then get each field's value sequentially - USING ORIGINAL APPROACH
+      // Then get each field's value
       for (let j = 0; j < fields.length; j++) {
         const field = fields[j];
         const valuePrompt = `For the ${section} section: Extract ONLY the value for ${field}. Return the value followed by the page number, separated by a pipe symbol: value|page`;
         totalQueries++;
         
-        debug(`Querying value for field ${j+1}/${fields.length}: ${section}.${field}`);
-        const valueResponse = await queryRAGWithRetry(valuePrompt, policyId);
+        const valueResponse = await queryRAG(valuePrompt, policyId);
+        debugLog(`${section}.${field} value: "${valueResponse}"`);
         
         // Parse value and page
         const [value = '', page = ''] = valueResponse.split('|').map(part => part.trim());
         
+        const fieldData: SectionFieldValue = {
+          fieldName: field,
+          value: value,
+          page: page
+        };
+        
+        // Always add to policyData even if value is empty or NF
+        policyData.sections[section].push(fieldData);
+        
         if (value && value !== 'NF') {
           successfulQueries++;
-          
-          const fieldValue = {
-            fieldName: field,
-            value: value,
-            page: page
-          };
-          
-          policyData.sections[section].push(fieldValue);
-          
-          // Make sure section exists in partial data
-          if (!partialData.sections![section]) {
-            partialData.sections![section] = [];
-          }
-          
-          partialData.sections![section].push(fieldValue);
-          
-          // Update UI with this new field
-          if (onPartialResults) {
-            currentDisplayRows = convertToDisplayRows(
-              { sections: { [section]: [fieldValue] } },
-              currentDisplayRows
-            );
-            onPartialResults({ ...partialData }, [...currentDisplayRows]);
-          }
+        }
+        
+        // Add to partial data for UI updates
+        if (!partialData.sections![section]) {
+          partialData.sections![section] = [];
+        }
+        partialData.sections![section].push(fieldData);
+        
+        // UI Update after each field - NEW
+        if (onPartialResults) {
+          currentDisplayRows = convertToDisplayRows(
+            { sections: { [section]: [fieldData] } },
+            currentDisplayRows,
+            showAllResponses
+          );
+          onPartialResults({...partialData}, [...currentDisplayRows], showAllResponses);
         }
         
         // Update progress - sections get 35-98% of the progress bar
@@ -402,16 +415,10 @@ const extractPolicyDataProgressively = async (
           
           setProgress(Math.min(Math.floor(progress), 98));
         }
-        
-        // Small delay between field queries to avoid rate limiting
-        await new Promise(r => setTimeout(r, 250));
       }
-      
-      // Small delay between sections to avoid rate limiting
-      await new Promise(r => setTimeout(r, 500));
     }
     
-    debug(`Extraction completed. Total queries: ${totalQueries}, Successful: ${successfulQueries}`);
+    debugLog(`Extraction complete. Total queries: ${totalQueries}, Successful: ${successfulQueries}`);
     
     // Cache the results for future use
     policyDataCache[policyId] = policyData;
@@ -420,20 +427,20 @@ const extractPolicyDataProgressively = async (
     
     // Final update with all data
     if (onPartialResults) {
-      currentDisplayRows = currentDisplayRows.map(row => ({ ...row, isNew: false }));
-      onPartialResults(policyData, currentDisplayRows);
+      currentDisplayRows = convertToDisplayRows(policyData, [], showAllResponses);
+      onPartialResults(policyData, currentDisplayRows, showAllResponses);
     }
     
     return policyData;
   } catch (err) {
-    debug(`Error extracting policy data: ${err}`);
+    debugLog(`Error extracting policy data: ${err}`);
     console.error('Error extracting policy data:', err);
     throw err;
   }
 };
 
 // Transform to Excel format (unchanged)
-const transformToExcelFormat = (data: PolicyData): any[] => {
+const transformToExcelFormat = (data: PolicyData, includeEmpty = false): any[] => {
   const rows: any[] = [];
 
   // Define header fields to include
@@ -447,17 +454,18 @@ const transformToExcelFormat = (data: PolicyData): any[] => {
     { field: 'expiringPolicyPremium', label: 'Expiring Policy Premium' }
   ];
   
-  // Create header section
+  // Create header section - only include fields with real values
   for (const { field, label } of headerFields) {
     const value = data.headerInfo[field as keyof PolicyHeaderInfo];
-    if (value && 
+    // Skip empty values unless includeEmpty is true
+    if (includeEmpty || (value && 
         value !== 'NF' && 
         value !== 'I don\'t know.' &&
-        value !== 'I don\'t know') {
+        value !== 'I don\'t know')) {
       rows.push({
         'Section': 'Header',
         'Field': label,
-        'Value': value,
+        'Value': value || '',
         'Page': ''
       });
     }
@@ -466,15 +474,16 @@ const transformToExcelFormat = (data: PolicyData): any[] => {
   // Add section fields
   for (const [section, fields] of Object.entries(data.sections)) {
     for (const field of fields) {
-      if (field.value && 
+      // Skip fields with "I don't know" or empty values unless includeEmpty is true
+      if (includeEmpty || (field.value && 
           field.value !== 'NF' && 
           field.value !== 'I don\'t know.' &&
           field.value !== 'I don\'t know' &&
-          field.fieldName) {
+          field.fieldName)) {
         rows.push({
           'Section': section,
           'Field': field.fieldName,
-          'Value': field.value,
+          'Value': field.value || '',
           'Page': field.page
         });
       }
@@ -484,21 +493,23 @@ const transformToExcelFormat = (data: PolicyData): any[] => {
   return rows;
 };
 
-// Debug helper 
+// Debug helper to see what's actually in the data
 const logDataToConsole = (data: PolicyData) => {
-  debug('===== POLICY DATA EXTRACTED =====');
-  debug(`Header Info: ${JSON.stringify(data.headerInfo)}`);
-  debug(`Sections: ${Object.keys(data.sections).join(', ')}`);
+  console.log('===== POLICY DATA EXTRACTED =====');
+  console.log('Header Info:', data.headerInfo);
+  console.log('Sections:', Object.keys(data.sections));
   
   let totalFields = 0;
   for (const [section, fields] of Object.entries(data.sections)) {
-    debug(`Section ${section} has ${fields.length} fields`);
+    console.log(`Section ${section} has ${fields.length} fields`);
     totalFields += fields.length;
   }
   
-  debug(`Total fields across all sections: ${totalFields}`);
-  debug('=================================');
+  console.log(`Total fields across all sections: ${totalFields}`);
+  console.log('=================================');
 };
+
+// ================ THE UI COMPONENT ================
 
 const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = ({
   policyId,
@@ -509,6 +520,7 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
   const [progress, setProgress] = useState<number>(0);
   const exportInProgress = useRef(false);
   const [debugMode, setDebugMode] = useState(false);
+  const [showAllResponses, setShowAllResponses] = useState(false);
   const [estimatedTime, setEstimatedTime] = useState<number | null>(null);
   
   // Progressive UI states
@@ -522,7 +534,7 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
       policyType: '',
       policyPremium: '',
       expiringPolicyPremium: ''
-    },
+    }, // Initialize with empty strings for all required properties
     sections: {}
   });
   const [displayRows, setDisplayRows] = useState<DisplayRow[]>([]);
@@ -530,11 +542,11 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   
-  // Stats tracking
-  const [extractionStats, setExtractionStats] = useState({
-    startTime: 0,
-    totalFields: 0,
-    fieldsExtracted: 0
+  // Stats
+  const [stats, setStats] = useState({
+    totalQueries: 0,
+    successfulQueries: 0,
+    startTime: 0
   });
   
   // Define columns for the data display
@@ -569,7 +581,15 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
       minWidth: 50,
       maxWidth: 80,
       isResizable: true,
-    }
+    },
+    // Show raw response in debug mode
+    ...(debugMode ? [{
+      key: 'rawResponse',
+      name: 'Raw Response',
+      fieldName: 'rawResponse',
+      minWidth: 150,
+      isResizable: true,
+    }] : [])
   ];
 
   // Cleanup function to ensure state is reset properly
@@ -599,27 +619,20 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
       );
     }
     
-    // Remove "isNew" flag after 3 seconds
-    const updatedRows = filtered.map(row => {
-      if (row.isNew) {
-        return { ...row, isNew: false };
-      }
-      return row;
-    });
+    setFilteredRows(filtered);
     
-    setFilteredRows(updatedRows);
+    // Set a timeout to remove "isNew" highlighting after a few seconds
+    const timeoutId = setTimeout(() => {
+      setDisplayRows(rows => rows.map(row => ({...row, isNew: false})));
+    }, 3000);
+    
+    return () => clearTimeout(timeoutId);
   }, [displayRows, searchTerm, selectedSection]);
 
   // Handle partial results updates
-  const handlePartialResults = (data: Partial<PolicyData>, rows: DisplayRow[]) => {
+  const handlePartialResults = (data: Partial<PolicyData>, rows: DisplayRow[], showAll = false) => {
     setPartialData(data);
     setDisplayRows(rows);
-    
-    // Update stats
-    setExtractionStats(prevStats => ({
-      ...prevStats,
-      fieldsExtracted: rows.length,
-    }));
     
     // Auto-open panel if it's not already open and we have data
     if (!showProgressivePanel && rows.length > 0) {
@@ -628,7 +641,7 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
   };
 
   // Handle export to Excel
-  const exportToExcel = (data: DisplayRow[]) => {
+  const exportToExcel = (data: DisplayRow[], includeAllRows = false) => {
     if (data.length === 0) {
       setError('No data available to export.');
       return;
@@ -639,7 +652,7 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
       const excelRows = data.map(row => ({
         'Section': row.section,
         'Field': row.field,
-        'Value': row.value,
+        'Value': row.value === 'NF' && !includeAllRows ? '' : row.value,
         'Page': row.page
       }));
       
@@ -673,7 +686,7 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
         policyType: '',
         policyPremium: '',
         expiringPolicyPremium: ''
-      }, 
+      }, // Initialize with empty strings for all required properties 
       sections: {} 
     });
     setDisplayRows([]);
@@ -682,15 +695,22 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
     
     // Record start time for performance measurement
     const startTime = Date.now();
-    setExtractionStats({
-      startTime,
-      totalFields: 0,
-      fieldsExtracted: 0
+    setStats({
+      totalQueries: 0,
+      successfulQueries: 0,
+      startTime
     });
 
     try {
+      // First, clear cache for this policy to ensure fresh extraction
+      // Comment this out if you want to persist cache across runs
+      if (policyDataCache[policyId]) {
+        debugLog(`Clearing cache for policy ${policyId}`);
+        delete policyDataCache[policyId];
+      }
+      
       // Start extraction with progressive updates
-      await extractPolicyDataProgressively(
+      await extractPolicyData(
         policyId,
         (progressValue) => {
           setProgress(progressValue);
@@ -703,12 +723,13 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
             setEstimatedTime(remainingSeconds);
           }
         },
-        handlePartialResults
+        handlePartialResults,
+        showAllResponses
       );
       
       // Log performance information
       const totalTime = (Date.now() - startTime) / 1000;
-      debug(`Export completed in ${totalTime.toFixed(1)} seconds`);
+      debugLog(`Export completed in ${totalTime.toFixed(1)} seconds`);
       
       setIsExporting(false);
       setEstimatedTime(null);
@@ -728,16 +749,6 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
     const sections = new Set(displayRows.map(row => row.section));
     return Array.from(sections);
   }, [displayRows]);
-  
-  // Calculate extraction rate and estimated completion
-  const extractionRate = React.useMemo(() => {
-    if (!isExporting || extractionStats.fieldsExtracted === 0) return null;
-    
-    const elapsedSeconds = (Date.now() - extractionStats.startTime) / 1000;
-    if (elapsedSeconds < 5) return null; // Need some time to get a meaningful rate
-    
-    return extractionStats.fieldsExtracted / elapsedSeconds;
-  }, [isExporting, extractionStats]);
 
   return (
     <div>
@@ -780,16 +791,30 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
       <Panel
         isOpen={showProgressivePanel}
         onDismiss={() => setShowProgressivePanel(false)}
-        headerText={`Policy Data Explorer${isExporting ? ' (Extraction in Progress)' : ''}`}
+        headerText="Policy Data Explorer"
         type={PanelType.large}
         closeButtonAriaLabel="Close"
         onRenderFooterContent={() => (
           <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-            <DefaultButton onClick={() => setShowProgressivePanel(false)}>
-              Close
-            </DefaultButton>
+            <Stack horizontal tokens={{ childrenGap: 8 }}>
+              <DefaultButton onClick={() => setShowProgressivePanel(false)}>
+                Close
+              </DefaultButton>
+              {debugMode && (
+                <DefaultButton 
+                  onClick={() => {
+                    if (policyId) {
+                      delete policyDataCache[policyId];
+                      alert('Cache cleared for this policy.');
+                    }
+                  }}
+                >
+                  Clear Cache
+                </DefaultButton>
+              )}
+            </Stack>
             <PrimaryButton 
-              onClick={() => exportToExcel(filteredRows)}
+              onClick={() => exportToExcel(filteredRows, showAllResponses)}
               disabled={filteredRows.length === 0}
               iconProps={{ iconName: 'ExcelDocument' }}
             >
@@ -804,24 +829,18 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
           <Stack horizontal horizontalAlign="space-between" verticalAlign="center">
             <Text variant="mediumPlus">
               {isExporting 
-                ? `Extracted ${displayRows.length} fields so far (${progress}% complete)`
+                ? `Extracting data... (${progress}% complete)`
                 : `Found ${displayRows.length} fields in ${uniqueSections.length} sections`
               }
             </Text>
             
             {isExporting && (
-              <Stack horizontal verticalAlign="center">
-                <Spinner 
-                  size={SpinnerSize.small} 
-                  ariaLive="assertive"
-                />
-                <Text variant="small" style={{ marginLeft: 8 }}>
-                  {extractionRate && extractionRate > 0
-                    ? `${extractionRate.toFixed(1)} fields/sec`
-                    : 'Extracting...'
-                  }
-                </Text>
-              </Stack>
+              <Spinner 
+                size={SpinnerSize.small} 
+                label="Extracting..." 
+                ariaLive="assertive"
+                labelPosition="right"
+              />
             )}
           </Stack>
           
@@ -855,6 +874,17 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
                 disabled={isExporting && displayRows.length === 0 || uniqueSections.length === 0}
               />
             </Stack.Item>
+            
+            {/* Debug controls */}
+            {debugMode && (
+              <Stack.Item>
+                <Toggle 
+                  label="Show All Responses"
+                  checked={showAllResponses}
+                  onChange={(_, checked) => setShowAllResponses(checked || false)}
+                />
+              </Stack.Item>
+            )}
           </Stack>
           
           {/* Data table */}
@@ -867,6 +897,15 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
               
               const content = item[column.fieldName as keyof DisplayRow];
               
+              // For value column, display empty responses nicely
+              if (column.key === 'value' && (content === 'NF' || content === '')) {
+                return (
+                  <span style={{ color: '#999', fontStyle: 'italic' }}>
+                    {content === 'NF' ? 'Not Found' : 'Empty'}
+                  </span>
+                );
+              }
+              
               // Highlight newly added rows
               if (item.isNew) {
                 return (
@@ -874,7 +913,7 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
                     backgroundColor: '#fffde6', 
                     padding: '4px', 
                     borderRadius: '2px',
-                    animation: 'fadeBackgroundColor 3s forwards'
+                    animation: 'fadeBackgroundColor 2s forwards'
                   }}>
                     {content}
                   </div>
@@ -892,13 +931,9 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
             }}
           />
           
-          {filteredRows.length === 0 && (
+          {filteredRows.length === 0 && !isExporting && (
             <Stack horizontalAlign="center" style={{ padding: '40px 0' }}>
-              <Text>
-                {isExporting 
-                  ? "Extracting data... the results will appear here as they become available." 
-                  : "No data available yet. Start the extraction process or adjust your filters."}
-              </Text>
+              <Text>No data available yet. Please wait for extraction to progress or adjust your filters.</Text>
             </Stack>
           )}
         </Stack>
@@ -915,7 +950,7 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
       {/* Debug panel (optional) */}
       <div style={{ marginTop: '10px', fontSize: '12px' }}>
         <a href="#" onClick={(e) => { e.preventDefault(); setDebugMode(!debugMode); }}>
-          {debugMode ? "Hide Debug Info" : "Show Debug Info"}
+          {debugMode ? "Hide Debug" : "Show Debug"}
         </a>
         
         {debugMode && (
@@ -923,26 +958,42 @@ const ExportToExcelButton: React.FC<{ policyId: string; fileName?: string }> = (
             <p>Policy ID: {policyId}</p>
             <p>Export Status: {isExporting ? 'In Progress' : 'Ready'}</p>
             <p>Progress: {progress}%</p>
-            <p>Fields Extracted: {displayRows.length}</p>
+            <p>Displayed Rows: {displayRows.length}</p>
             <p>Sections Found: {uniqueSections.join(', ')}</p>
             <p>Cache Status: {policyDataCache[policyId] ? 'Cached' : 'Not Cached'}</p>
-            <p>Elapsed Time: {extractionStats.startTime > 0 ? `${Math.round((Date.now() - extractionStats.startTime) / 1000)}s` : 'N/A'}</p>
-            {extractionRate && <p>Extraction Rate: {extractionRate.toFixed(2)} fields/sec</p>}
-            <Button 
-              onClick={() => {
-                delete policyDataCache[policyId];
-                alert('Cache cleared for this policy.');
-              }}
-              style={{ marginTop: '8px' }}
-            >
-              Clear Cache
-            </Button>
-            <Button 
-              onClick={() => setShowProgressivePanel(true)}
-              style={{ marginTop: '8px', marginLeft: '8px' }}
-            >
-              Open Data Panel
-            </Button>
+            <p>Show All Responses: {showAllResponses ? 'Yes' : 'No'}</p>
+            {stats.startTime > 0 && (
+              <p>Time Elapsed: {Math.round((Date.now() - stats.startTime) / 1000)}s</p>
+            )}
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <Button 
+                onClick={() => {
+                  delete policyDataCache[policyId];
+                  alert('Cache cleared for this policy.');
+                }}
+              >
+                Clear Cache
+              </Button>
+              <Button 
+                onClick={() => setShowProgressivePanel(true)}
+              >
+                Open Data Panel
+              </Button>
+              <Button 
+                onClick={() => {
+                  const toggledValue = !showAllResponses;
+                  setShowAllResponses(toggledValue);
+                  
+                  // Refresh the display rows with all responses
+                  if (policyDataCache[policyId]) {
+                    const rows = convertToDisplayRows(policyDataCache[policyId], [], toggledValue);
+                    setDisplayRows(rows);
+                  }
+                }}
+              >
+                {showAllResponses ? 'Hide Empty Responses' : 'Show All Responses'}
+              </Button>
+            </div>
           </div>
         )}
       </div>
