@@ -22,8 +22,7 @@ import {
 } from '@fluentui/react';
 import { ChatAppRequest, ResponseMessage } from '../../api/models';
 
-// ================ ORIGINAL CODE BEGINS ================
-// Keep all original interfaces and functions exactly as they were
+
 
 interface PolicyHeaderInfo {
   insuredName: string;

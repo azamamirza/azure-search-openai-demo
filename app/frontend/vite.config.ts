@@ -81,7 +81,7 @@ export default defineConfig({
             },
 
             "/api": {
-                target: "https://capps-backend-2775otfh6oiva.calmsand-dc0a0904.centralus.azurecontainerapps.io",
+                target: "https://capps-backend-qpblwwfjsavwq.bluepebble-f9101277.centralus.azurecontainerapps.io",
                 changeOrigin: true,
                 secure: false,
                 ws: true,
