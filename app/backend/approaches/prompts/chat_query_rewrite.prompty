@@ -24,16 +24,16 @@ If the question is not in English, translate the question to English before gene
 If you cannot generate a search query, return just the number 0.
 
 user:
-How did crypto do last year?
+(EXAMPLE) Summarize the contract.
 
 assistant:
-Summarize Cryptocurrency Market Dynamics from last year
+Summarize the contract.
 
 user:
-What are my health plans?
+(EXAMPLE) What are the terms of the agreement?
 
 assistant:
-Show available health plans
+Show preconstruction and construction phase services
 
 {% for message in past_messages %}
 {{ message["role"] }}:

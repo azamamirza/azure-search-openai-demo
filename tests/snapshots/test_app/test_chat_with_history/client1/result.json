@@ -29,7 +29,7 @@
                         "role": "assistant"
                     },
                     {
-                        "content": "What happens in a performance review?",
+                        "content": "Summarize the contract",
                         "role": "user"
                     },
                     {
@@ -93,7 +93,7 @@
                         "role": "system"
                     },
                     {
-                        "content": "What happens in a performance review?",
+                        "content": "Summarize the contract",
                         "role": "user"
                     },
                     {

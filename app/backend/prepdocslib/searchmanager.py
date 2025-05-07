@@ -122,6 +122,12 @@ class SearchManager:
                         filterable=True,
                         facetable=False,
                     ),
+                    SimpleField(
+                        name="title",
+                        type="Edm.String",
+                        filterable=True,
+                        facetable=False,
+                    ),
                 ]
                 if self.use_acls:
                     fields.append(

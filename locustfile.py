@@ -16,10 +16,10 @@ class ChatUser(HttpUser):
         time.sleep(self.wait_time())
         first_question = random.choice(
             [
-                "What is included in my Northwind Health Plus plan that is not in standard?",
-                "What does a Product Manager do?",
-                "What happens in a performance review?",
-                "Whats your whistleblower policy?",
+                "What contracts are available for review?",
+                "What does a Construction manager at Risk do?",
+                "Summarize the LAX contract",
+                "What are preconstruction services?",
             ]
         )
 
@@ -86,7 +86,7 @@ class ChatVisionUser(HttpUser):
             json={
                 "messages": [
                     {
-                        "content": "Can you identify any correlation between oil prices and stock market trends?",
+                        "content": "Can you identify the official responses, clarification and/or notice of change to the referenced solicitation?",
                         "role": "user",
                     }
                 ],
@@ -115,7 +115,7 @@ class ChatVisionUser(HttpUser):
             "/chat/stream",
             json={
                 "messages": [
-                    {"content": "Compare the impact of interest rates and GDP in financial markets.", "role": "user"}
+                    {"content": "Summarize the Construction Manager at Risk Services Contract.", "role": "user"}
                 ],
                 "context": {
                     "overrides": {

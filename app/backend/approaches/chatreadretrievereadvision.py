@@ -106,7 +106,7 @@ class ChatReadRetrieveReadVisionApproach(ChatApproach):
             # Azure OpenAI takes the deployment name as the model name
             model=self.chatgpt_deployment if self.chatgpt_deployment else self.chatgpt_model,
             temperature=0.0,  # Minimize creativity for search query generation
-            max_tokens=100,
+            max_tokens=200,
             n=1,
             tools=tools,
             seed=seed,
@@ -211,7 +211,7 @@ class ChatReadRetrieveReadVisionApproach(ChatApproach):
         chat_coroutine = self.openai_client.chat.completions.create(
             model=self.gpt4v_deployment if self.gpt4v_deployment else self.gpt4v_model,
             messages=messages,
-            temperature=overrides.get("temperature", 0.3),
+            temperature=overrides.get("temperature", 0.0),
             max_tokens=1024,
             n=1,
             stream=should_stream,

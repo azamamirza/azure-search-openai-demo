@@ -108,7 +108,7 @@ class ChatReadRetrieveReadApproach(ChatApproach):
             # Azure OpenAI takes the deployment name as the model name
             model=self.chatgpt_deployment if self.chatgpt_deployment else self.chatgpt_model,
             temperature=0.0,  # Minimize creativity for search query generation
-            max_tokens=100,  # Setting too low risks malformed JSON, setting too high may affect performance
+            max_tokens=200,  # Setting too low risks malformed JSON, setting too high may affect performance
             n=1,
             tools=tools,
             seed=seed,
@@ -195,7 +195,7 @@ class ChatReadRetrieveReadApproach(ChatApproach):
             # Azure OpenAI takes the deployment name as the model name
             model=self.chatgpt_deployment if self.chatgpt_deployment else self.chatgpt_model,
             messages=messages,
-            temperature=overrides.get("temperature", 0.3),
+            temperature=overrides.get("temperature", 0.0),
             max_tokens=1024,
             n=1,
             stream=should_stream,
